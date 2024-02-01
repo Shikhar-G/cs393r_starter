@@ -45,6 +45,14 @@ struct PathOption {
 
 class Navigation {
  public:
+  // Max velocity constant
+  const float MAX_VELOCITY = 1.0;
+  // Max acceleration constant
+  const float MAX_ACCELERATION = 4.0;
+  // Time step constant
+  const float TIME_STEP = 0.05;
+  // Wheelbase constant
+  const float WHEELBASE = 0.324;
 
    // Constructor
   explicit Navigation(const std::string& map_file, ros::NodeHandle* n);
@@ -100,6 +108,12 @@ class Navigation {
   float nav_goal_angle_;
   // Map of the environment.
   vector_map::VectorMap map_;
+  // 1D time-optimal control path option, given distance to go, returns a velocity to execute.
+  float TimeOptimalControl(float distance);
+  // Convert cartesian to polar coordinates
+  Eigen::Vector2f CartesianToPolar(float x, float y);
+  // Convert polar to cartesian coordinates
+  Eigen::Vector2f PolarToCartesian(float r, float theta);
 };
 
 }  // namespace navigation

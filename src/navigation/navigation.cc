@@ -82,6 +82,10 @@ Navigation::Navigation(const string& map_name, ros::NodeHandle* n) :
 }
 
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
+  // Set the navigation goal.
+  nav_goal_loc_ = loc;
+  nav_goal_angle_ = angle;
+  nav_complete_ = false;
 }
 
 void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
@@ -125,13 +129,18 @@ void Navigation::Run() {
 
   // The control iteration goes here. 
   // Feel free to make helper functions to structure the control appropriately.
+  float distance_to_goal = (nav_goal_loc_ - robot_loc_).norm();
+  float steering_angle = AngleMod(atan2(nav_goal_loc_.y() - robot_loc_.y(),
+                                       nav_goal_loc_.x() - robot_loc_.x()) -
+                                  robot_angle_);
   
   // The latest observed point cloud is accessible via "point_cloud_"
 
   // Eventually, you will have to set the control values to issue drive commands:
   // drive_msg_.curvature = ...;
-  drive_msg_.velocity = 1;
-
+  drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
+  // Get curvature from steering angle
+  drive_msg_.curvature = 1 / WHEELBASE * tan(steering_angle);
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
   global_viz_msg_.header.stamp = ros::Time::now();
@@ -142,4 +151,31 @@ void Navigation::Run() {
   drive_pub_.publish(drive_msg_);
 }
 
-}  // namespace navigation
+// private helper functions go here
+
+Eigen::Vector2f Navigation::PolarToCartesian(float r, float theta) {
+  // Convert polar to cartesian coordinates
+  return Eigen::Vector2f(r * cos(theta), r * sin(theta));
+}
+
+Eigen::Vector2f Navigation::CartesianToPolar(float x, float y) {
+  // Convert cartesian to polar coordinates
+  return Eigen::Vector2f(sqrt(x * x + y * y), atan2(y, x));
+}
+
+float Navigation::TimeOptimalControl(float distance) {
+  // Calculate how far we would go at the current velocity in 1 time step.
+  float distance_at_current_velocity = robot_vel_.norm() * TIME_STEP;
+  float distance_to_decel = (pow(robot_vel_.norm(), 2) / (2 * MAX_ACCELERATION));
+  // Accelerate if we are far from the goal.
+  if (distance > distance_at_current_velocity && distance > distance_to_decel) {
+   // Pass in max velocity in terms of the current theta
+    return 1;
+  }
+  // Decelerate if we are close to the goal.
+  return 0;
+}
+}
+
+
+  // namespace navigation
