@@ -49,6 +49,8 @@ class Navigation {
   const float MAX_VELOCITY = 1.0;
   // Max acceleration constant
   const float MAX_ACCELERATION = 4.0;
+  // stop distance buffer from point of interest
+  const float STOP_DISTANCE = 0.1;
   // Time step constant
   const float TIME_STEP = 0.05;
   // Wheelbase constant
