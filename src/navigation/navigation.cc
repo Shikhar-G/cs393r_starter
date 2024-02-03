@@ -166,7 +166,7 @@ Eigen::Vector2f Navigation::CartesianToPolar(float x, float y) {
 float Navigation::TimeOptimalControl(float distance) {
   // Calculate how far we would go at the current velocity in 1 time step.
   float distance_at_current_velocity = robot_vel_.norm() * TIME_STEP;
-  float distance_to_decel = (pow(robot_vel_.norm(), 2) / (2 * MAX_ACCELERATION));
+  float distance_to_decel = ((math_util::Sq(robot_vel_.x()) + math_util::Sq(robot_vel_.y())) / (2 * MAX_ACCELERATION));
   float drive_velocity = 0;
   // Accelerate if we are far from the goal.
   if (distance > distance_at_current_velocity && distance > distance_to_decel + STOP_DISTANCE) {

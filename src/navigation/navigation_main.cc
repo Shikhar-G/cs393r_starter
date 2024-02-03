@@ -94,6 +94,21 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   // msg.range_max // Maximum observable range
   // msg.range_min // Minimum observable range
   // msg.ranges[i] // The range of the i'th ray
+
+  //resize point cloud to actual size
+  size_t range_size = sizeof(msg.ranges)/sizeof(msg.ranges[0]);
+  point_cloud_.resize(range_size);
+  //starting angle
+  float angle = msg.angle_max;
+  //convert ranges into cartesian coordinates
+  for(long unsigned int i = 0; i < point_cloud_.size(); i++) {
+    
+    point_cloud_[i] = msg.ranges[i]*geometry::Heading(angle) + kLaserLoc;
+
+    angle += msg.angle_increment;
+  }
+
+
   navigation_->ObservePointCloud(point_cloud_, msg.header.stamp.toSec());
   last_laser_msg_ = msg;
 }
