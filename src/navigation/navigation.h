@@ -25,6 +25,8 @@
 
 #include "vector_map/vector_map.h"
 
+#include "simple_queue.h"
+
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
@@ -43,8 +45,17 @@ struct PathOption {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 };
 
+struct RobotState {
+  Eigen::Vector2f loc;
+  float angle;
+  Eigen::Vector2f vel;
+  float omega;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+};
+
 class Navigation {
  public:
+ const float MAX_CURVATURE = 1.0;
   // Max velocity constant
   const float MAX_VELOCITY = 1.0;
   // Max acceleration constant
@@ -55,6 +66,12 @@ class Navigation {
   const float TIME_STEP = 0.05;
   // Wheelbase constant
   const float WHEELBASE = 0.324;
+  // Car length
+  const float CAR_LENGTH = 0.535;
+  // car width
+  const float CAR_WIDTH = 0.281;
+  //obstacle safety margin
+  const float MARGIN = 0.1;
 
    // Constructor
   explicit Navigation(const std::string& map_file, ros::NodeHandle* n);
@@ -78,7 +95,7 @@ class Navigation {
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
  private:
-
+  simple_
   // Whether odometry has been initialized.
   bool odom_initialized_;
   // Whether localization has been initialized.
@@ -101,7 +118,8 @@ class Navigation {
   float odom_start_angle_;
   // Latest observed point cloud.
   std::vector<Eigen::Vector2f> point_cloud_;
-
+  // SimpleQueue to store the controls issued
+  SimpleQueue<std::pair<Eigen::Vector2f, float>>, float> control_queue_;
   // Whether navigation is complete.
   bool nav_complete_;
   // Navigation goal location.
@@ -116,6 +134,8 @@ class Navigation {
   Eigen::Vector2f CartesianToPolar(float x, float y);
   // Convert polar to cartesian coordinates
   Eigen::Vector2f PolarToCartesian(float r, float theta);
+  //calculate free path length for 1 curve
+  float FreePathLength(Eigen::Vector2f current_position, float curvature, std::vector<Eigen::Vector2f> point_cloud);
 };
 
 }  // namespace navigation

@@ -127,12 +127,20 @@ void Navigation::Run() {
   // If odometry has not been initialized, we can't do anything.
   if (!odom_initialized_) return;
 
+  // Get last odom and point cloud
+  last_odom = RobotState(odom_loc_, odom_angle_, robot_vel_, robot_omega_);
+  last_point_cloud_ = point_cloud_;
+
+  
+
+
   // The control iteration goes here. 
   // Feel free to make helper functions to structure the control appropriately.
-  float distance_to_goal = (nav_goal_loc_ - robot_loc_).norm();
-  float steering_angle = AngleMod(atan2(nav_goal_loc_.y() - robot_loc_.y(),
-                                       nav_goal_loc_.x() - robot_loc_.x()) -
-                                  robot_angle_);
+
+  float distance_to_goal = (robot_state.loc - nav_goal_loc_).norm();
+  float steering_angle = AngleMod(atan2(nav_goal_loc_.y() - robot_state.loc.y(),
+                                       nav_goal_loc_.x() - robot_state.loc.x()) -
+                                  robot_state.angle);
   
   // The latest observed point cloud is accessible via "point_cloud_"
 
@@ -175,6 +183,45 @@ float Navigation::TimeOptimalControl(float distance) {
   }
   // Decelerate if we are close to the goal.
   return drive_velocity;
+}
+
+float Navigation::FreePathLength(Eigen::Vector2f current_position, float curvature, std::vector<Eigen::Vector2f> point_cloud) {
+  float radius = 1/curvature;
+  Eigen::Vector2f min_point;
+  float car_w = CAR_WIDTH + MARGIN;
+  float car_l = CAR_LENGTH + MARGIN;
+  float range_side_l = radius - car_w/2;
+  float range_side_r = sqrt(pow(range_side_l,2) + pow((WHEELBASE + car_l)/2,2));
+  float range_front_b = sqrt(pow(radius + car_w/2,2) + pow((WHEELBASE + car_l)/2,2));
+
+  float Min_Theta = 360;
+  for(int point = 0; point < point_cloud.size(); point++){
+    //convert point cloud to Polar
+    //Eigen::Vector2f(radius, Theta)
+    point_x = point_cloud[point].x();
+    point_y = point_cloud[point].y();
+    Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x,2) + pow(point_y - radius,2)), atan2(point_x, point_y - radius) );
+    if(polar_point.x() >= range_side_l && polar_point.x() <= range_side_r){
+      Theta = acos(range_side_l/polar_point.x());
+      Diff_Theta = polar_point.y() - Theta;
+      bool is_min = Diff_Theta < Min_Theta;
+      //assign smallest value to min theta.
+      Min_Theta = Min_Theta*(!is_min) + Diff_Theta*is_min;
+      
+    } 
+    else if(polar_point.x() <= range_side_r && polar_point.x() > range_side_r){
+      Theta = asin((WHEEL_BASE + car_l)/2/polar_point.x());
+      Diff_Theta = polar_point.y() - Theta;
+      bool is_min = Diff_Theta < Min_Theta;
+      //assign smallest value to min theta.
+      Min_Theta = Min_Theta*(!is_min) + Diff_Theta*is_min;
+    }
+
+  }
+  //change this if they are actually in radians
+  float Min_Free_Path = (Min_Theta/360)*2*M_PI*radius;
+  return Min_Free_Path;
+  
 }
 }
 
