@@ -86,6 +86,8 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   const Vector2f kLaserLoc(0.2, 0);
 
   static vector<Vector2f> point_cloud_;
+  point_cloud_.resize(0);
+
   // TODO Convert the LaserScan to a point cloud
   // The LaserScan parameters are accessible as follows:
   // msg.angle_increment // Angular increment between subsequent rays
@@ -96,15 +98,14 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   // msg.ranges[i] // The range of the i'th ray
 
   //resize point cloud to actual size
-  size_t range_size = sizeof(msg.ranges)/sizeof(msg.ranges[0]);
-  point_cloud_.resize(range_size);
   //starting angle
   float angle = msg.angle_min;
   //convert ranges into cartesian coordinates
   // ROS_INFO("%f\t%f",msg.range_min,msg.range_max);
-  for(long unsigned int i = 0; i < point_cloud_.size(); i++) {
-    
-    point_cloud_[i] = msg.ranges[i]*geometry::Heading(angle) + kLaserLoc;
+  for(long unsigned int i = 0; i < msg.ranges.size(); i++){
+    if (msg.ranges[i] > msg.range_min && msg.ranges[i] < msg.range_max) {
+      point_cloud_.push_back(msg.ranges[i]*geometry::Heading(angle) + kLaserLoc);
+    }
     //increment is + or - ???
     angle += msg.angle_increment;
   }

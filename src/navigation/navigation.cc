@@ -127,31 +127,13 @@ void Navigation::Run() {
   // If odometry has not been initialized, we can't do anything.
   if (!odom_initialized_) return;
 
-  // Get last odom and point cloud #### needs fixing
-  // RobotState last_odom(odom_loc_, odom_angle_, robot_vel_, robot_omega_);
-  std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
-
-  
-
-
+  // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
   // The control iteration goes here. 
   // Feel free to make helper functions to structure the control appropriately.
-  
-  // float distance_to_goal = (robot_state.loc - nav_goal_loc_).norm();
-  // float steering_angle = AngleMod(atan2(nav_goal_loc_.y() - robot_state.loc.y(),
-  //                                      nav_goal_loc_.x() - robot_state.loc.x()) -
-  //                                 robot_state.angle);
-  // float steering_angle = AngleMod(atan2(nav_goal_loc_.y() - robot_loc_.y(),
-  //                                      nav_goal_loc_.x() - robot_loc_.x()) -
-  //                                 robot_angle_);
-  float curvature = 0.5;//1 / WHEELBASE * tan(steering_angle);
-  float distance_to_goal = FreePathLength(robot_loc_,curvature,point_cloud_);
+  float curvature = 0.5;
+  float distance_to_goal = FreePathLength(curvature,point_cloud_);
   // The latest observed point cloud is accessible via "point_cloud_"
-
-  // Eventually, you will have to set the control values to issue drive commands:
-  // drive_msg_.curvature = ...;
   drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
-  // Get curvature from steering angle
   drive_msg_.curvature = curvature;
   // Add timestamps to all messages.
   local_viz_msg_.header.stamp = ros::Time::now();
@@ -189,67 +171,71 @@ float Navigation::TimeOptimalControl(float distance) {
   return drive_velocity;
 }
 
-float Navigation::FreePathLength(Eigen::Vector2f current_position, float curvature, std::vector<Eigen::Vector2f> point_cloud) {
-  float radius = 1/curvature;
+float Navigation::FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud) {
+  float radius;
+  if (curvature == 0) {
+    radius = 0;
+  }
+  else {
+    radius = 1 / curvature;
+  }
   Eigen::Vector2f min_point;
   float car_w = CAR_WIDTH + MARGIN;
   float car_l = CAR_LENGTH + MARGIN;
   float range_side_l = radius - car_w/2;
   float range_side_r = sqrt(pow(range_side_l,2) + pow((WHEELBASE + car_l)/2,2));
   float range_front_b = sqrt(pow(radius + car_w/2,2) + pow((WHEELBASE + car_l)/2,2));
-  // ROS_INFO("%f\t %f\t %f",range_side_l,range_side_r, range_front_b);
-  float Min_Theta = 1;
-  Eigen::Vector2f min_point_here(0,0);
-  // float Min_Theta1 = 360;
+  
+  float min_theta = M_PI/2;
+
   if(curvature == 0){
-    float Straight_Free_Path_Length = 10;
-    for(unsigned long point = 0; point < point_cloud.size(); point++){
-      float point_x = point_cloud[point].x();
-      float point_y = point_cloud[point].y();
+    float straight_fpl = 10;
+    for(unsigned long point = 0; point < point_cloud_.size(); point++){
+      float point_x = point_cloud_[point].x();
+      float point_y = point_cloud_[point].y();
       if(point_y <= car_w/2 && point_y >= -car_w/2){
-        bool is_min = point_x < Straight_Free_Path_Length ;
-        Straight_Free_Path_Length = Straight_Free_Path_Length*(!is_min) + point_x*is_min;
+        bool is_min = point_x < straight_fpl ;
+        straight_fpl = straight_fpl*(!is_min) + point_x*is_min;
       }
     }
-    return Straight_Free_Path_Length;
+    
+    return straight_fpl;
   }else{
     for(unsigned long point = 0; point < point_cloud.size(); point++){
       //convert point cloud to Polar
-      //Eigen::Vector2f(radius, Theta)
+      //Eigen::Vector2f(radius, theta)
       float point_x = point_cloud[point].x();
       float point_y = point_cloud[point].y();
-      Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x,2) + pow(point_y - radius,2)), atan2(point_x, point_y - radius) );
-      // ROS_INFO("%f \t %f",point_x,point_y);
+      Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x,2) + pow(point_y - radius,2)), atan2(point_y - radius, point_x) + M_PI/2);
+      // discard points that are behind the car
+      if (polar_point.y() < -M_PI/2 || polar_point.y() > M_PI/2){
+        continue;
+      }
+     
       if(polar_point.x() >= range_side_l && polar_point.x() <= range_side_r){
-        float Theta = acos(range_side_l/polar_point.x());
-        float Diff_Theta = abs(polar_point.y() - Theta);
-        bool is_min = Diff_Theta < Min_Theta;
+        float theta = acos(range_side_l/polar_point.x());
+        float diff_theta = abs(polar_point.y() - theta);
+        bool is_min = diff_theta < min_theta;
         //assign smallest value to min theta.
-        Min_Theta = Min_Theta*(!is_min) + Diff_Theta*is_min;
-        if(is_min){
-          min_point_here = point_cloud[point];
-        }
+        min_theta = min_theta*(!is_min) + diff_theta*is_min;
         
       } 
       else if(polar_point.x() <= range_front_b && polar_point.x() > range_side_r){
-        float Theta = asin((WHEELBASE + car_l)/2/polar_point.x());
-        float Diff_Theta = abs(polar_point.y() - Theta);
-        bool is_min = Diff_Theta < Min_Theta;
+        float theta = asin((WHEELBASE + car_l)/2/polar_point.x());
+        float diff_theta = abs(polar_point.y() - theta);
+        bool is_min = diff_theta < min_theta;
         //assign smallest value to min theta.
-        Min_Theta = Min_Theta*(!is_min) + Diff_Theta*is_min;
-        // Min_Theta1 = Min_Theta;
-        if(is_min){
-          min_point_here = point_cloud[point];
-        }
+        min_theta = min_theta*(!is_min) + diff_theta*is_min;
+
       }
 
     }
-    // ROS_INFO("%f \t %f",min_point_here.x(),min_point_here.y());
+    
   }
-  //change this if they are actually in radians
-  float Min_Free_Path = (Min_Theta)*abs(radius) - 0.3;
   
-  return Min_Free_Path;
+  float min_fpl = (min_theta)*abs(radius);
+  
+  return min_fpl;
   
 }
 }

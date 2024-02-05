@@ -71,7 +71,7 @@ class Navigation {
   // car width
   const float CAR_WIDTH = 0.281;
   //obstacle safety margin
-  const float MARGIN = 0.4;
+  const float MARGIN = 0.1;
 
    // Constructor
   explicit Navigation(const std::string& map_file, ros::NodeHandle* n);
@@ -135,7 +135,7 @@ class Navigation {
   // Convert polar to cartesian coordinates
   Eigen::Vector2f PolarToCartesian(float r, float theta);
   //calculate free path length for 1 curve
-  float FreePathLength(Eigen::Vector2f current_position, float curvature, std::vector<Eigen::Vector2f> point_cloud);
+  float FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud);
 };
 
 }  // namespace navigation
