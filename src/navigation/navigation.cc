@@ -34,211 +34,231 @@
 #include "navigation.h"
 #include "visualization/visualization.h"
 
-using Eigen::Vector2f;
 using amrl_msgs::AckermannCurvatureDriveMsg;
 using amrl_msgs::VisualizationMsg;
+using Eigen::Vector2f;
 using std::string;
 using std::vector;
 
 using namespace math_util;
 using namespace ros_helpers;
 
-namespace {
-ros::Publisher drive_pub_;
-ros::Publisher viz_pub_;
-VisualizationMsg local_viz_msg_;
-VisualizationMsg global_viz_msg_;
-AckermannCurvatureDriveMsg drive_msg_;
-// Epsilon value for handling limited numerical precision.
-const float kEpsilon = 1e-5;
-} //namespace
+namespace
+{
+  ros::Publisher drive_pub_;
+  ros::Publisher viz_pub_;
+  VisualizationMsg local_viz_msg_;
+  VisualizationMsg global_viz_msg_;
+  AckermannCurvatureDriveMsg drive_msg_;
+  // Epsilon value for handling limited numerical precision.
+  const float kEpsilon = 1e-5;
+} // namespace
 
-namespace navigation {
+namespace navigation
+{
 
-string GetMapFileFromName(const string& map) {
-  string maps_dir_ = ros::package::getPath("amrl_maps");
-  return maps_dir_ + "/" + map + "/" + map + ".vectormap.txt";
-}
+  string GetMapFileFromName(const string &map)
+  {
+    string maps_dir_ = ros::package::getPath("amrl_maps");
+    return maps_dir_ + "/" + map + "/" + map + ".vectormap.txt";
+  }
 
-Navigation::Navigation(const string& map_name, ros::NodeHandle* n) :
-    odom_initialized_(false),
-    localization_initialized_(false),
-    robot_loc_(0, 0),
-    robot_angle_(0),
-    robot_vel_(0, 0),
-    robot_omega_(0),
-    nav_complete_(true),
-    nav_goal_loc_(0, 0),
-    nav_goal_angle_(0) {
-  map_.Load(GetMapFileFromName(map_name));
-  drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
-      "ackermann_curvature_drive", 1);
-  viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
-  local_viz_msg_ = visualization::NewVisualizationMessage(
-      "base_link", "navigation_local");
-  global_viz_msg_ = visualization::NewVisualizationMessage(
-      "map", "navigation_global");
-  InitRosHeader("base_link", &drive_msg_.header);
-}
+  Navigation::Navigation(const string &map_name, ros::NodeHandle *n) : odom_initialized_(false),
+                                                                       localization_initialized_(false),
+                                                                       robot_loc_(0, 0),
+                                                                       robot_angle_(0),
+                                                                       robot_vel_(0, 0),
+                                                                       robot_omega_(0),
+                                                                       nav_complete_(true),
+                                                                       nav_goal_loc_(0, 0),
+                                                                       nav_goal_angle_(0)
+  {
+    map_.Load(GetMapFileFromName(map_name));
+    drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
+        "ackermann_curvature_drive", 1);
+    viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
+    local_viz_msg_ = visualization::NewVisualizationMessage(
+        "base_link", "navigation_local");
+    global_viz_msg_ = visualization::NewVisualizationMessage(
+        "map", "navigation_global");
+    InitRosHeader("base_link", &drive_msg_.header);
+  }
 
-void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
-  // Set the navigation goal.
-  nav_goal_loc_ = loc;
-  nav_goal_angle_ = angle;
-  nav_complete_ = false;
-}
+  void Navigation::SetNavGoal(const Vector2f &loc, float angle)
+  {
+    // Set the navigation goal.
+    nav_goal_loc_ = loc;
+    nav_goal_angle_ = angle;
+    nav_complete_ = false;
+  }
 
-void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
-  localization_initialized_ = true;
-  robot_loc_ = loc;
-  robot_angle_ = angle;
-}
+  void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
+  {
+    localization_initialized_ = true;
+    robot_loc_ = loc;
+    robot_angle_ = angle;
+  }
 
-void Navigation::UpdateOdometry(const Vector2f& loc,
-                                float angle,
-                                const Vector2f& vel,
-                                float ang_vel) {
-  robot_omega_ = ang_vel;
-  robot_vel_ = vel;
-  if (!odom_initialized_) {
-    odom_start_angle_ = angle;
-    odom_start_loc_ = loc;
-    odom_initialized_ = true;
+  void Navigation::UpdateOdometry(const Vector2f &loc,
+                                  float angle,
+                                  const Vector2f &vel,
+                                  float ang_vel)
+  {
+    robot_omega_ = ang_vel;
+    robot_vel_ = vel;
+    if (!odom_initialized_)
+    {
+      odom_start_angle_ = angle;
+      odom_start_loc_ = loc;
+      odom_initialized_ = true;
+      odom_loc_ = loc;
+      odom_angle_ = angle;
+      return;
+    }
     odom_loc_ = loc;
     odom_angle_ = angle;
-    return;
   }
-  odom_loc_ = loc;
-  odom_angle_ = angle;
-}
 
-void Navigation::ObservePointCloud(const vector<Vector2f>& cloud,
-                                   double time) {
-  point_cloud_ = cloud;                                     
-}
-
-void Navigation::Run() {
-  // This function gets called 20 times a second to form the control loop.
-  
-  // Clear previous visualizations.
-  visualization::ClearVisualizationMsg(local_viz_msg_);
-  visualization::ClearVisualizationMsg(global_viz_msg_);
-
-  // If odometry has not been initialized, we can't do anything.
-  if (!odom_initialized_) return;
-
-  // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
-  // The control iteration goes here. 
-  // Feel free to make helper functions to structure the control appropriately.
-  float curvature = 0.5;
-  float distance_to_goal = FreePathLength(curvature,point_cloud_);
-  // The latest observed point cloud is accessible via "point_cloud_"
-  drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
-  drive_msg_.curvature = curvature;
-  // Add timestamps to all messages.
-  local_viz_msg_.header.stamp = ros::Time::now();
-  global_viz_msg_.header.stamp = ros::Time::now();
-  drive_msg_.header.stamp = ros::Time::now();
-  // Publish messages.
-  viz_pub_.publish(local_viz_msg_);
-  viz_pub_.publish(global_viz_msg_);
-  drive_pub_.publish(drive_msg_);
-}
-
-// private helper functions go here
-
-Eigen::Vector2f Navigation::PolarToCartesian(float r, float theta) {
-  // Convert polar to cartesian coordinates
-  return Eigen::Vector2f(r * cos(theta), r * sin(theta));
-}
-
-Eigen::Vector2f Navigation::CartesianToPolar(float x, float y) {
-  // Convert cartesian to polar coordinates
-  return Eigen::Vector2f(sqrt(x * x + y * y), atan2(y, x));
-}
-
-float Navigation::TimeOptimalControl(float distance) {
-  // Calculate how far we would go at the current velocity in 1 time step.
-  float distance_at_current_velocity = robot_vel_.norm() * TIME_STEP;
-  float distance_to_decel = ((math_util::Sq(robot_vel_.x()) + math_util::Sq(robot_vel_.y())) / (2 * MAX_ACCELERATION));
-  float drive_velocity = 0;
-  // Accelerate if we are far from the goal.
-  if (distance > distance_at_current_velocity && distance > distance_to_decel + STOP_DISTANCE) {
-   // Pass in max velocity in terms of the current theta
-    drive_velocity = 1;
+  void Navigation::ObservePointCloud(const vector<Vector2f> &cloud,
+                                     double time)
+  {
+    point_cloud_ = cloud;
   }
-  // Decelerate if we are close to the goal.
-  return drive_velocity;
-}
 
-float Navigation::FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud) {
-  float radius;
-  if (curvature == 0) {
-    radius = 0;
-  }
-  else {
-    radius = 1 / curvature;
-  }
-  Eigen::Vector2f min_point;
-  float car_w = CAR_WIDTH + MARGIN;
-  float car_l = CAR_LENGTH + MARGIN;
-  float range_side_l = radius - car_w/2;
-  float range_side_r = sqrt(pow(range_side_l,2) + pow((WHEELBASE + car_l)/2,2));
-  float range_front_b = sqrt(pow(radius + car_w/2,2) + pow((WHEELBASE + car_l)/2,2));
-  
-  float min_theta = M_PI/2;
+  void Navigation::Run()
+  {
+    // This function gets called 20 times a second to form the control loop.
 
-  if(curvature == 0){
-    float straight_fpl = 10;
-    for(unsigned long point = 0; point < point_cloud_.size(); point++){
-      float point_x = point_cloud_[point].x();
-      float point_y = point_cloud_[point].y();
-      if(point_y <= car_w/2 && point_y >= -car_w/2){
-        bool is_min = point_x < straight_fpl ;
-        straight_fpl = straight_fpl*(!is_min) + point_x*is_min;
+    // Clear previous visualizations.
+    visualization::ClearVisualizationMsg(local_viz_msg_);
+    visualization::ClearVisualizationMsg(global_viz_msg_);
+
+    // If odometry has not been initialized, we can't do anything.
+    if (!odom_initialized_)
+      return;
+
+    // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
+    // The control iteration goes here.
+    // Feel free to make helper functions to structure the control appropriately.
+    float curvature = 0.5;
+    float distance_to_goal = FreePathLength(curvature, point_cloud_);
+    // The latest observed point cloud is accessible via "point_cloud_"
+    drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
+    drive_msg_.curvature = curvature;
+    // Add timestamps to all messages.
+    local_viz_msg_.header.stamp = ros::Time::now();
+    global_viz_msg_.header.stamp = ros::Time::now();
+    drive_msg_.header.stamp = ros::Time::now();
+    // Publish messages.
+    viz_pub_.publish(local_viz_msg_);
+    viz_pub_.publish(global_viz_msg_);
+    drive_pub_.publish(drive_msg_);
+  }
+
+  // private helper functions go here
+
+  Eigen::Vector2f Navigation::PolarToCartesian(float r, float theta)
+  {
+    // Convert polar to cartesian coordinates
+    return Eigen::Vector2f(r * cos(theta), r * sin(theta));
+  }
+
+  Eigen::Vector2f Navigation::CartesianToPolar(float x, float y)
+  {
+    // Convert cartesian to polar coordinates
+    return Eigen::Vector2f(sqrt(x * x + y * y), atan2(y, x));
+  }
+
+  float Navigation::TimeOptimalControl(float distance)
+  {
+    // Calculate how far we would go at the current velocity in 1 time step.
+    float distance_at_current_velocity = robot_vel_.norm() * TIME_STEP;
+    float distance_to_decel = ((math_util::Sq(robot_vel_.x()) + math_util::Sq(robot_vel_.y())) / (2 * MAX_ACCELERATION));
+    float drive_velocity = 0;
+    // Accelerate if we are far from the goal.
+    if (distance > distance_at_current_velocity && distance > distance_to_decel + STOP_DISTANCE)
+    {
+      // Pass in max velocity in terms of the current theta
+      drive_velocity = 1;
+    }
+    // Decelerate if we are close to the goal.
+    return drive_velocity;
+  }
+
+  float Navigation::FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud)
+  {
+    float radius;
+    if (curvature == 0)
+    {
+      radius = 0;
+    }
+    else
+    {
+      radius = 1 / curvature;
+    }
+    Eigen::Vector2f min_point;
+    float car_w = CAR_WIDTH + MARGIN;
+    float car_l = CAR_LENGTH + MARGIN;
+    float range_side_l = radius - car_w / 2;
+    float range_side_r = sqrt(pow(range_side_l, 2) + pow((WHEELBASE + car_l) / 2, 2));
+    float range_front_b = sqrt(pow(radius + car_w / 2, 2) + pow((WHEELBASE + car_l) / 2, 2));
+
+    float min_theta = M_PI / 2;
+
+    if (curvature == 0)
+    {
+      float straight_fpl = 10;
+      for (unsigned long point = 0; point < point_cloud_.size(); point++)
+      {
+        float point_x = point_cloud_[point].x();
+        float point_y = point_cloud_[point].y();
+        if (point_y <= car_w / 2 && point_y >= -car_w / 2)
+        {
+          bool is_min = point_x < straight_fpl;
+          straight_fpl = straight_fpl * (!is_min) + point_x * is_min;
+        }
+      }
+
+      return straight_fpl;
+    }
+    else
+    {
+      for (unsigned long point = 0; point < point_cloud.size(); point++)
+      {
+        // convert point cloud to Polar
+        // Eigen::Vector2f(radius, theta)
+        float point_x = point_cloud[point].x();
+        float point_y = point_cloud[point].y();
+        Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x, 2) + pow(point_y - radius, 2)), atan2(point_y - radius, point_x) + M_PI / 2);
+        // discard points that are behind the car
+        if (polar_point.y() < -M_PI / 2 || polar_point.y() > M_PI / 2)
+        {
+          continue;
+        }
+
+        if (polar_point.x() >= range_side_l && polar_point.x() <= range_side_r)
+        {
+          float theta = acos(range_side_l / polar_point.x());
+          float diff_theta = abs(polar_point.y() - theta);
+          bool is_min = diff_theta < min_theta;
+          // assign smallest value to min theta.
+          min_theta = min_theta * (!is_min) + diff_theta * is_min;
+        }
+        else if (polar_point.x() <= range_front_b && polar_point.x() > range_side_r)
+        {
+          float theta = asin((WHEELBASE + car_l) / 2 / polar_point.x());
+          float diff_theta = abs(polar_point.y() - theta);
+          bool is_min = diff_theta < min_theta;
+          // assign smallest value to min theta.
+          min_theta = min_theta * (!is_min) + diff_theta * is_min;
+        }
       }
     }
-    
-    return straight_fpl;
-  }else{
-    for(unsigned long point = 0; point < point_cloud.size(); point++){
-      //convert point cloud to Polar
-      //Eigen::Vector2f(radius, theta)
-      float point_x = point_cloud[point].x();
-      float point_y = point_cloud[point].y();
-      Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x,2) + pow(point_y - radius,2)), atan2(point_y - radius, point_x) + M_PI/2);
-      // discard points that are behind the car
-      if (polar_point.y() < -M_PI/2 || polar_point.y() > M_PI/2){
-        continue;
-      }
-     
-      if(polar_point.x() >= range_side_l && polar_point.x() <= range_side_r){
-        float theta = acos(range_side_l/polar_point.x());
-        float diff_theta = abs(polar_point.y() - theta);
-        bool is_min = diff_theta < min_theta;
-        //assign smallest value to min theta.
-        min_theta = min_theta*(!is_min) + diff_theta*is_min;
-        
-      } 
-      else if(polar_point.x() <= range_front_b && polar_point.x() > range_side_r){
-        float theta = asin((WHEELBASE + car_l)/2/polar_point.x());
-        float diff_theta = abs(polar_point.y() - theta);
-        bool is_min = diff_theta < min_theta;
-        //assign smallest value to min theta.
-        min_theta = min_theta*(!is_min) + diff_theta*is_min;
 
-      }
+    float min_fpl = (min_theta)*abs(radius);
 
-    }
-    
+    return min_fpl;
   }
-  
-  float min_fpl = (min_theta)*abs(radius);
-  
-  return min_fpl;
-  
-}
 }
 
-
-  // namespace navigation
+// namespace navigation
