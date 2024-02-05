@@ -99,13 +99,14 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
   size_t range_size = sizeof(msg.ranges)/sizeof(msg.ranges[0]);
   point_cloud_.resize(range_size);
   //starting angle
-  float angle = msg.angle_max;
+  float angle = msg.angle_min;
   //convert ranges into cartesian coordinates
+  // ROS_INFO("%f\t%f",msg.range_min,msg.range_max);
   for(long unsigned int i = 0; i < point_cloud_.size(); i++) {
     
     point_cloud_[i] = msg.ranges[i]*geometry::Heading(angle) + kLaserLoc;
     //increment is + or - ???
-    angle -= msg.angle_increment;
+    angle += msg.angle_increment;
   }
 
 
@@ -143,7 +144,7 @@ void SignalHandler(int) {
 
 void LocalizationCallback(const amrl_msgs::Localization2DMsg msg) {
   if (FLAGS_v > 0) {
-    printf("Localization t=%f\n", GetWallTime());1
+    printf("Localization t=%f\n", GetWallTime());
   }
   navigation_->UpdateLocation(Vector2f(msg.pose.x, msg.pose.y), msg.pose.theta);
 }

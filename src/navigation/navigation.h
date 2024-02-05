@@ -71,7 +71,7 @@ class Navigation {
   // car width
   const float CAR_WIDTH = 0.281;
   //obstacle safety margin
-  const float MARGIN = 0.1;
+  const float MARGIN = 0.4;
 
    // Constructor
   explicit Navigation(const std::string& map_file, ros::NodeHandle* n);
@@ -95,7 +95,7 @@ class Navigation {
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
 
  private:
-  simple_
+  // simple_
   // Whether odometry has been initialized.
   bool odom_initialized_;
   // Whether localization has been initialized.
@@ -118,8 +118,8 @@ class Navigation {
   float odom_start_angle_;
   // Latest observed point cloud.
   std::vector<Eigen::Vector2f> point_cloud_;
-  // SimpleQueue to store the controls issued
-  SimpleQueue<std::pair<Eigen::Vector2f, float>>, float> control_queue_;
+  // SimpleQueue to store the controls issued # needs to be fixed
+  // SimpleQueue<std::pair<std::vector<Eigen::Vector2f, float>, float>> control_queue_;
   // Whether navigation is complete.
   bool nav_complete_;
   // Navigation goal location.
