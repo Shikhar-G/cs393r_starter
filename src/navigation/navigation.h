@@ -76,7 +76,7 @@ namespace navigation
     // car width
     const float CAR_WIDTH = 0.281;
     // obstacle safety margin
-    const float MARGIN = 0.1;
+    const float MARGIN = 0.15;
 
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);

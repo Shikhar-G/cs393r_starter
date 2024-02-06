@@ -311,8 +311,8 @@ namespace navigation
       Eigen::Vector2f offset(0,-radius);
       for(unsigned long point = 0; point < point_cloud.size(); point++){
         //skip points that are outside 90 degree curve max
-        if((radius == abs(radius)) && (point_cloud[point].x() < 0 || point_cloud[point].y() < -car_w)) continue;
-        else if(point_cloud[point].x() < 0 || point_cloud[point].y() > car_w) continue;
+        if((radius > 0) && (point_cloud[point].x() < 0 || point_cloud[point].y() < -car_w/2)) continue; //turning counterclockwise, skip points
+        else if(point_cloud[point].x() < 0 || point_cloud[point].y() > car_w/2) continue; //turning clockwise, skip points
 
         Eigen::Vector2f pt_orig = point_cloud[point] + offset;
         float distance = abs(pt_orig.norm() - radius);
