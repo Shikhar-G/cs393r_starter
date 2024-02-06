@@ -140,14 +140,29 @@ namespace navigation
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
-    // vector<float> curvatures;
-    // for(float i = -1; i <= 1; i += 0.1){
-    //   curvatures.push_back(i);
-    // }
-    float curvature = 0.5;
-    float distance_to_goal = FreePathLength(curvature, point_cloud_);
-    float approach = ClosestPointApproach(curvature,point_cloud_);
-    float score = ScorePaths(approach,distance_to_goal,0.25);
+    vector<float> curvatures;
+    for(float i = -1; i <= 1; i += 0.1){
+      curvatures.push_back(i);
+    }
+    float curvature = 0;
+    float distance_to_goal = 0;
+    float approach = 0;
+    float score = 0;
+    unsigned long best_score;
+    for(unsigned long i = 0; i < curvatures.size(); i++){
+      float dis = FreePathLength(curvatures[i], point_cloud_);
+      approach = ClosestPointApproach(curvatures[i],point_cloud_);
+      float curr_score = ScorePaths(approach,dis,0.25);
+      if(score < curr_score){
+        score = curr_score;
+        best_score = i;
+        distance_to_goal = dis;
+      }
+    }
+    curvature = curvatures[best_score];
+    // float distance_to_goal = FreePathLength(curvature, point_cloud_);
+    // float approach = ClosestPointApproach(curvature,point_cloud_);
+    // float score = ScorePaths(approach,distance_to_goal,0.25);
     // ROS_INFO("%f\t%f",approach,score);
     // The latest observed point cloud is accessible via "point_cloud_"
     drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
