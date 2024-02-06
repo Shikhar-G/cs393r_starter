@@ -140,7 +140,7 @@ namespace navigation
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
-    float curvature = 0.5;
+    float curvature = 0;
     float distance_to_goal = FreePathLength(curvature, point_cloud_);
     // The latest observed point cloud is accessible via "point_cloud_"
     drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
@@ -194,7 +194,7 @@ namespace navigation
     }
     else
     {
-      radius = 1 / curvature;
+      radius = abs(1 / curvature);
     }
     Eigen::Vector2f min_point;
     float car_w = CAR_WIDTH + MARGIN;
@@ -219,7 +219,7 @@ namespace navigation
         }
       }
 
-      return straight_fpl;
+      return straight_fpl - (WHEELBASE + car_l)/2;
     }
     else
     {
@@ -229,7 +229,13 @@ namespace navigation
         // Eigen::Vector2f(radius, theta)
         float point_x = point_cloud[point].x();
         float point_y = point_cloud[point].y();
-        Eigen::Vector2f polar_point = Eigen::Vector2f(sqrt(pow(point_x, 2) + pow(point_y - radius, 2)), atan2(point_y - radius, point_x) + M_PI / 2);
+        Eigen::Vector2f polar_point;
+        if (curvature > 0) {
+          polar_point = Eigen::Vector2f(sqrt(pow(point_x, 2) + pow(point_y - radius, 2)), atan2(point_y - radius, point_x) + M_PI / 2);
+        }
+        else {
+          polar_point = Eigen::Vector2f(sqrt(pow(point_x, 2) + pow(point_y + radius, 2)), M_PI/2 - atan2(point_y + radius, point_x) );
+        }
         // discard points that are behind the car
         if (polar_point.y() < -M_PI / 2 || polar_point.y() > M_PI / 2)
         {
@@ -254,7 +260,6 @@ namespace navigation
         }
       }
     }
-
     float min_fpl = (min_theta)*abs(radius);
 
     return min_fpl;
