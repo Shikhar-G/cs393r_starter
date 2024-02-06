@@ -141,6 +141,10 @@ namespace navigation
     Eigen::Vector2f PolarToCartesian(float r, float theta);
     // calculate free path length for 1 curve
     float FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud);
+    // along a curve or straight line the closest point to that curve or line.
+    float ClosestPointApproach(float curvature, std::vector<Eigen::Vector2f> point_cloud);
+
+    float ScorePaths(float closest_approach, float free_path_length, float w1);
   };
 
 } // namespace navigation

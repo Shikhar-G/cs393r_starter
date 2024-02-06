@@ -140,8 +140,15 @@ namespace navigation
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
-    float curvature = 0;
+    // vector<float> curvatures;
+    // for(float i = -1; i <= 1; i += 0.1){
+    //   curvatures.push_back(i);
+    // }
+    float curvature = 0.5;
     float distance_to_goal = FreePathLength(curvature, point_cloud_);
+    float approach = ClosestPointApproach(curvature,point_cloud_);
+    float score = ScorePaths(approach,distance_to_goal,0.25);
+    // ROS_INFO("%f\t%f",approach,score);
     // The latest observed point cloud is accessible via "point_cloud_"
     drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
     drive_msg_.curvature = curvature;
@@ -218,7 +225,7 @@ namespace navigation
           straight_fpl = straight_fpl * (!is_min) + point_x * is_min;
         }
       }
-
+      //subtract by the distance to the front of the vehicle before return
       return straight_fpl - (WHEELBASE + car_l)/2;
     }
     else
@@ -263,6 +270,47 @@ namespace navigation
     float min_fpl = (min_theta)*abs(radius);
 
     return min_fpl;
+  }
+
+  float Navigation::ClosestPointApproach(float curvature, std::vector<Eigen::Vector2f> point_cloud){
+    float radius;
+    float closest_point = 3;
+    float max_range = 5;
+    float car_w = CAR_WIDTH + MARGIN;
+    if (curvature == 0)
+    {
+      radius = 0;
+    }
+    else
+    {
+      radius = 1 / curvature;
+    }
+
+    if(radius == 0){
+      for(unsigned long point = 0; point < point_cloud.size(); point++){
+        if(point_cloud[point].y() < closest_point && point_cloud[point].x() <= max_range){
+          closest_point = abs(point_cloud[point].y());
+        }
+      }
+    } else {
+      Eigen::Vector2f offset(0,-radius);
+      for(unsigned long point = 0; point < point_cloud.size(); point++){
+        //skip points that are outside 90 degree curve max
+        if((radius == abs(radius)) && (point_cloud[point].x() < 0 || point_cloud[point].y() < -car_w)) continue;
+        else if(point_cloud[point].x() < 0 || point_cloud[point].y() > car_w) continue;
+
+        Eigen::Vector2f pt_orig = point_cloud[point] + offset;
+        float distance = abs(pt_orig.norm() - radius);
+        if (distance < closest_point){
+          closest_point = distance;
+        }
+      }
+    }
+    return closest_point;
+  }
+
+  float Navigation::ScorePaths(float closest_approach, float free_path_length, float w1) {
+    return free_path_length + closest_approach*w1;
   }
 }
 
