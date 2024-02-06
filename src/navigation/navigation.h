@@ -76,8 +76,9 @@ namespace navigation
     // car width
     const float CAR_WIDTH = 0.281;
     // obstacle safety margin
-    const float MARGIN = 0.15;
-
+    const float MARGIN = 0.1;
+    // naive system latency
+    const float LATENCY = 0.03;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -140,9 +141,13 @@ namespace navigation
     // Convert polar to cartesian coordinates
     Eigen::Vector2f PolarToCartesian(float r, float theta);
     // calculate free path length for 1 curve
-    float FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud);
+    float FreePathLength(float curvature, const std::vector<Eigen::Vector2f> &point_cloud);
     // along a curve or straight line the closest point to that curve or line.
-    float ClosestPointApproach(float curvature, std::vector<Eigen::Vector2f> point_cloud);
+    float ClosestPointApproach(float curvature, const std::vector<Eigen::Vector2f> &point_cloud);
+    // calculate the forwarded prediction change in location of the robot
+    Eigen::Vector2f ForwardPredictedLocationChange();
+    // transform point cloud according to time delay
+    std::vector<Eigen::Vector2f> TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange);
 
     float ScorePaths(float closest_approach, float free_path_length, float w1);
   };

@@ -140,6 +140,7 @@ namespace navigation
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
+    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
     vector<float> curvatures;
     for(float i = -1; i <= 1; i += 0.1){
       curvatures.push_back(i);
@@ -150,8 +151,8 @@ namespace navigation
     float score = 0;
     unsigned long best_score;
     for(unsigned long i = 0; i < curvatures.size(); i++){
-      float dis = FreePathLength(curvatures[i], point_cloud_);
-      approach = ClosestPointApproach(curvatures[i],point_cloud_);
+      float dis = FreePathLength(curvatures[i], transformed_cloud);
+      approach = ClosestPointApproach(curvatures[i],transformed_cloud);
       float curr_score = ScorePaths(approach,dis,0.25);
       if(score < curr_score){
         score = curr_score;
@@ -207,7 +208,7 @@ namespace navigation
     return drive_velocity;
   }
 
-  float Navigation::FreePathLength(float curvature, std::vector<Eigen::Vector2f> point_cloud)
+  float Navigation::FreePathLength(float curvature, const std::vector<Eigen::Vector2f> &point_cloud)
   {
     float radius;
     if (curvature == 0)
@@ -219,8 +220,8 @@ namespace navigation
       radius = abs(1 / curvature);
     }
     Eigen::Vector2f min_point;
-    float car_w = CAR_WIDTH + MARGIN;
-    float car_l = CAR_LENGTH + MARGIN;
+    float car_w = CAR_WIDTH + 2 * MARGIN;
+    float car_l = CAR_LENGTH + 2 * MARGIN;
     float range_side_l = radius - car_w / 2;
     float range_side_r = sqrt(pow(range_side_l, 2) + pow((WHEELBASE + car_l) / 2, 2));
     float range_front_b = sqrt(pow(radius + car_w / 2, 2) + pow((WHEELBASE + car_l) / 2, 2));
@@ -230,10 +231,10 @@ namespace navigation
     if (curvature == 0)
     {
       float straight_fpl = 10;
-      for (unsigned long point = 0; point < point_cloud_.size(); point++)
+      for (unsigned long point = 0; point < point_cloud.size(); point++)
       {
-        float point_x = point_cloud_[point].x();
-        float point_y = point_cloud_[point].y();
+        float point_x = point_cloud[point].x();
+        float point_y = point_cloud[point].y();
         if (point_y <= car_w / 2 && point_y >= -car_w / 2)
         {
           bool is_min = point_x < straight_fpl;
@@ -287,11 +288,11 @@ namespace navigation
     return min_fpl;
   }
 
-  float Navigation::ClosestPointApproach(float curvature, std::vector<Eigen::Vector2f> point_cloud){
+  float Navigation::ClosestPointApproach(float curvature, const std::vector<Eigen::Vector2f> &point_cloud){
     float radius;
     float closest_point = 3;
     float max_range = 5;
-    float car_w = CAR_WIDTH + MARGIN;
+    float car_w = CAR_WIDTH + 2 * MARGIN;
     if (curvature == 0)
     {
       radius = 0;
@@ -327,6 +328,22 @@ namespace navigation
   float Navigation::ScorePaths(float closest_approach, float free_path_length, float w1) {
     return free_path_length + closest_approach*w1;
   }
+
+  Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
+    float dx = robot_vel_.x() * LATENCY * cos(odom_angle_);
+    float dy = robot_vel_.y() * LATENCY * sin(odom_angle_);
+    return Eigen::Vector2f(dx, dy);
+  }
+
+  std::vector<Eigen::Vector2f> Navigation::TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange) {
+    std::vector<Eigen::Vector2f> transformed_cloud;
+    transformed_cloud.resize(0);
+    for (unsigned long i = 0; i < cloud.size(); i++) {
+      transformed_cloud.push_back(cloud[i] + locChange);
+    }
+    return transformed_cloud;
+  }
+
 }
 
 // namespace navigation
