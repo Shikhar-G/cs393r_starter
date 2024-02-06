@@ -339,7 +339,7 @@ namespace navigation
     std::vector<Eigen::Vector2f> transformed_cloud;
     transformed_cloud.resize(0);
     for (unsigned long i = 0; i < cloud.size(); i++) {
-      transformed_cloud.push_back(cloud[i] + locChange);
+      transformed_cloud.push_back(cloud[i] - locChange);
     }
     return transformed_cloud;
   }
