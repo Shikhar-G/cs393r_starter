@@ -60,6 +60,10 @@ namespace navigation
   class Navigation
   {
   public:
+    std::vector<float> cmd_velocities_;
+    std::vector<float> measured_velocities_;
+    std::vector<int> time;
+    int start_time_ = 0;
     const float MAX_CURVATURE = 1.0;
     // Max velocity constant
     const float MAX_VELOCITY = 1.0;
@@ -76,9 +80,9 @@ namespace navigation
     // car width
     const float CAR_WIDTH = 0.281;
     // obstacle safety margin
-    const float MARGIN = 0.1;
+    const float MARGIN = 0.075;
     // naive system latency
-    const float LATENCY = 0.03;
+    const float LATENCY = 0.01;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -102,6 +106,7 @@ namespace navigation
 
   private:
     // simple_
+
     // Whether odometry has been initialized.
     bool odom_initialized_;
     // Whether localization has been initialized.

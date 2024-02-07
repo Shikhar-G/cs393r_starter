@@ -137,37 +137,50 @@ namespace navigation
     if (!odom_initialized_)
       return;
 
+    time.push_back((ros::Time::now().toNSec() / 1000000) - start_time_);
+
+
+    float next_vel = sin((ros::Time::now().toNSec() / 1e8) - start_time_);
+    drive_msg_.velocity = next_vel;
+    drive_msg_.curvature = 0;
+    measured_velocities_.push_back(robot_vel_.x());
+    cmd_velocities_.push_back(drive_msg_.velocity);
+
+
+
+    // time in seconds
+
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
-    // The control iteration goes here.
-    // Feel free to make helper functions to structure the control appropriately.
-    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
-    vector<float> curvatures;
-    for(float i = -1; i <= 1; i += 0.1){
-      curvatures.push_back(i);
-    }
-    float curvature = 0;
-    float distance_to_goal = 0;
-    float approach = 0;
-    float score = 0;
-    unsigned long best_score;
-    for(unsigned long i = 0; i < curvatures.size(); i++){
-      float dis = FreePathLength(curvatures[i], transformed_cloud);
-      approach = ClosestPointApproach(curvatures[i],transformed_cloud);
-      float curr_score = ScorePaths(approach,dis,0.25);
-      if(score < curr_score){
-        score = curr_score;
-        best_score = i;
-        distance_to_goal = dis;
-      }
-    }
-    curvature = curvatures[best_score];
+    // Eigen::
+    // // The control iteration goes here.
+    // // Feel free to make helper functions to structure the control appropriately.
+    // vector<float> curvatures;
+    // for(float i = -1; i <= 1; i += 0.1){
+    //   curvatures.push_back(i);
+    // }
+    // float curvature = 0;
+    // float distance_to_goal = 0;
+    // float approach = 0;
+    // float score = 0;
+    // unsigned long best_score;
+    // for(unsigned long i = 0; i < curvatures.size(); i++){
+    //   float dis = FreePathLength(curvatures[i], point_cloud_);
+    //   approach = ClosestPointApproach(curvatures[i],point_cloud_);
+    //   float curr_score = ScorePaths(approach,dis,0.2);
+    //   if(score < curr_score){
+    //     score = curr_score;
+    //     best_score = i;
+    //     distance_to_goal = dis;
+    //   }
+    // }
+    // curvature = curvatures[best_score];
     // float distance_to_goal = FreePathLength(curvature, point_cloud_);
     // float approach = ClosestPointApproach(curvature,point_cloud_);
     // float score = ScorePaths(approach,distance_to_goal,0.25);
     // ROS_INFO("%f\t%f",approach,score);
     // The latest observed point cloud is accessible via "point_cloud_"
-    drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
-    drive_msg_.curvature = curvature;
+    // drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
+    // drive_msg_.curvature = curvature;
     // Add timestamps to all messages.
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();
@@ -220,8 +233,8 @@ namespace navigation
       radius = abs(1 / curvature);
     }
     Eigen::Vector2f min_point;
-    float car_w = CAR_WIDTH + 2 * MARGIN;
-    float car_l = CAR_LENGTH + 2 * MARGIN;
+    float car_w = CAR_WIDTH + MARGIN;
+    float car_l = CAR_LENGTH + MARGIN;
     float range_side_l = radius - car_w / 2;
     float range_side_r = sqrt(pow(range_side_l, 2) + pow((WHEELBASE + car_l) / 2, 2));
     float range_front_b = sqrt(pow(radius + car_w / 2, 2) + pow((WHEELBASE + car_l) / 2, 2));
@@ -231,10 +244,10 @@ namespace navigation
     if (curvature == 0)
     {
       float straight_fpl = 10;
-      for (unsigned long point = 0; point < point_cloud.size(); point++)
+      for (unsigned long point = 0; point < point_cloud_.size(); point++)
       {
-        float point_x = point_cloud[point].x();
-        float point_y = point_cloud[point].y();
+        float point_x = point_cloud_[point].x();
+        float point_y = point_cloud_[point].y();
         if (point_y <= car_w / 2 && point_y >= -car_w / 2)
         {
           bool is_min = point_x < straight_fpl;
@@ -292,7 +305,7 @@ namespace navigation
     float radius;
     float closest_point = 3;
     float max_range = 5;
-    float car_w = CAR_WIDTH + 2 * MARGIN;
+    float car_w = CAR_WIDTH + MARGIN;
     if (curvature == 0)
     {
       radius = 0;
@@ -312,8 +325,8 @@ namespace navigation
       Eigen::Vector2f offset(0,-radius);
       for(unsigned long point = 0; point < point_cloud.size(); point++){
         //skip points that are outside 90 degree curve max
-        if((radius > 0) && (point_cloud[point].x() < 0 || point_cloud[point].y() < -car_w/2)) continue; //turning counterclockwise, skip points
-        else if(point_cloud[point].x() < 0 || point_cloud[point].y() > car_w/2) continue; //turning clockwise, skip points
+        if((radius == abs(radius)) && (point_cloud[point].x() < 0 || point_cloud[point].y() < -car_w)) continue;
+        else if(point_cloud[point].x() < 0 || point_cloud[point].y() > car_w) continue;
 
         Eigen::Vector2f pt_orig = point_cloud[point] + offset;
         float distance = abs(pt_orig.norm() - radius);
@@ -328,22 +341,6 @@ namespace navigation
   float Navigation::ScorePaths(float closest_approach, float free_path_length, float w1) {
     return free_path_length + closest_approach*w1;
   }
-
-  Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
-    float dx = robot_vel_.x() * LATENCY * cos(odom_angle_);
-    float dy = robot_vel_.y() * LATENCY * sin(odom_angle_);
-    return Eigen::Vector2f(dx, dy);
-  }
-
-  std::vector<Eigen::Vector2f> Navigation::TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange) {
-    std::vector<Eigen::Vector2f> transformed_cloud;
-    transformed_cloud.resize(0);
-    for (unsigned long i = 0; i < cloud.size(); i++) {
-      transformed_cloud.push_back(cloud[i] + locChange);
-    }
-    return transformed_cloud;
-  }
-
 }
 
 // namespace navigation

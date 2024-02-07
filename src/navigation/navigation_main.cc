@@ -187,11 +187,30 @@ int main(int argc, char **argv)
       n.subscribe("/move_base_simple/goal", 1, &GoToCallback);
 
   RateLoop loop(20.0);
+  navigation_->start_time_ = ros::Time::now().toNSec() / 1000000;
   while (run_ && ros::ok())
   {
     ros::spinOnce();
+
     navigation_->Run();
     loop.Sleep();
+  }
+  std::cout << "Measured velocities: " << endl;
+  for (auto &v : navigation_->measured_velocities_)
+  {
+    std::cout << v << ", ";
+  }
+  std ::cout << endl;
+  std::cout << "Commanded velocities: " << endl;
+  for (auto &v : navigation_->cmd_velocities_)
+  {
+    std::cout << v << ", ";
+  }
+  std::cout << endl;
+  std::cout << "Time: " << endl;
+  for (auto &v : navigation_->time)
+  {
+    std::cout << v << ", ";
   }
   delete navigation_;
   return 0;
