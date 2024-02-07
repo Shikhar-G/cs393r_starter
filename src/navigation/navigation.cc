@@ -140,7 +140,7 @@ namespace navigation
     time.push_back((ros::Time::now().toNSec() / 1000000) - start_time_);
 
 
-    float next_vel = sin((ros::Time::now().toNSec() / 1e8) - start_time_);
+    float next_vel = sin((ros::Time::now().toNSec() / 5e8) - start_time_);
     drive_msg_.velocity = next_vel;
     drive_msg_.curvature = 0;
     measured_velocities_.push_back(robot_vel_.x());
