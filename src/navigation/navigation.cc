@@ -285,7 +285,7 @@ namespace navigation
     }
     float min_fpl = (min_theta)*abs(radius);
 
-    return min_fpl;
+    return min(min_fpl,(float)10.0);
   }
 
   float Navigation::ClosestPointApproach(float curvature, const std::vector<Eigen::Vector2f> &point_cloud){
