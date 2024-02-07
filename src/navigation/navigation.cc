@@ -330,8 +330,8 @@ namespace navigation
   }
 
   Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
-    float dx = robot_vel_.x() * LATENCY * cos(odom_angle_);
-    float dy = robot_vel_.y() * LATENCY * sin(odom_angle_);
+    float dx = robot_vel_.x() * LATENCY * cos(odom_angle_ - odom_start_angle_);
+    float dy = robot_vel_.y() * LATENCY * sin(odom_angle_ - odom_start_angle_);
     return Eigen::Vector2f(dx, dy);
   }
 

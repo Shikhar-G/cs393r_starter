@@ -78,7 +78,7 @@ namespace navigation
     // obstacle safety margin
     const float MARGIN = 0.075;
     // naive system latency
-    const float LATENCY = 0.01;
+    const float LATENCY = 0.055;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
