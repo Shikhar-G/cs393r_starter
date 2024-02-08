@@ -66,7 +66,7 @@ namespace navigation
     // Max acceleration constant
     const float MAX_ACCELERATION = 4.0;
     // stop distance buffer from point of interest
-    const float STOP_DISTANCE = 0.1;
+    const float STOP_DISTANCE = 0.15;
     // Time step constant
     const float TIME_STEP = 0.05;
     // Wheelbase constant
@@ -76,9 +76,9 @@ namespace navigation
     // car width
     const float CAR_WIDTH = 0.281;
     // obstacle safety margin
-    const float MARGIN = 0.075;
-    // naive system latency
-    const float LATENCY = 0.055;
+    const float MARGIN = 0.1;
+    // system latency
+    const float LATENCY = 0.125;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 

@@ -141,26 +141,22 @@ namespace navigation
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
     std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
-    vector<float> curvatures;
-    for(float i = -1; i <= 1; i += 0.1){
-      curvatures.push_back(i);
-    }
-    float curvature = 0;
+    float curvature_interval = 0.1;
+    float best_curvature = 0;
     float distance_to_goal = 0;
     float approach = 0;
     float score = 0;
-    unsigned long best_score;
-    for(unsigned long i = 0; i < curvatures.size(); i++){
-      float dis = FreePathLength(curvatures[i], transformed_cloud);
-      approach = ClosestPointApproach(curvatures[i],transformed_cloud);
+    for(int i = 0; i < 20; i++){
+      float dis = FreePathLength(-1 + i*curvature_interval, transformed_cloud);
+      approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
       float curr_score = ScorePaths(approach,dis,0.25);
       if(score < curr_score){
         score = curr_score;
-        best_score = i;
         distance_to_goal = dis;
+        best_curvature = -1 + i*curvature_interval;
       }
     }
-    curvature = curvatures[best_score];
+    float curvature = best_curvature;
     // float distance_to_goal = FreePathLength(curvature, point_cloud_);
     // float approach = ClosestPointApproach(curvature,point_cloud_);
     // float score = ScorePaths(approach,distance_to_goal,0.25);
@@ -330,8 +326,8 @@ namespace navigation
   }
 
   Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
-    float dx = robot_vel_.x() * LATENCY * cos(odom_angle_ - odom_start_angle_);
-    float dy = robot_vel_.y() * LATENCY * sin(odom_angle_ - odom_start_angle_);
+    float dx = robot_vel_.x() * LATENCY;
+    float dy = robot_vel_.y() * LATENCY; 
     return Eigen::Vector2f(dx, dy);
   }
 
