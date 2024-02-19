@@ -28,6 +28,10 @@
 #include "shared/util/random.h"
 #include "vector_map/vector_map.h"
 
+//ros testing
+#include "ros/ros.h"
+#include "ros/package.h"
+
 #ifndef SRC_PARTICLE_FILTER_H_
 #define SRC_PARTICLE_FILTER_H_
 
@@ -102,6 +106,15 @@ class ParticleFilter {
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
   bool odom_initialized_;
+  
+  //particle sample, in the update step
+    //CONSTANTS
+  float k1 = 1;
+  float k2 = 0.01;
+  float k3 = 0.25;
+  float k4 = 1;
+    //helper function: motion model sample. It takes in odom and a particle and outputs a prediction.
+  Particle MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle);
 };
 }  // namespace slam
 

@@ -61,6 +61,7 @@ void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
 }
 
+
 void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
                                             const float angle,
                                             int num_ranges,
@@ -91,11 +92,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     // You can create a new line segment instance as follows, for :
     line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
     // Access the end points using `.p0` and `.p1` members:
-    printf("P0: %f, %f P1: %f,%f\n", 
-           my_line.p0.x(),
-           my_line.p0.y(),
-           my_line.p1.x(),
-           my_line.p1.y());
+    // printf("P0: %f, %f P1: %f,%f\n", 
+    //        my_line.p0.x(),
+    //        my_line.p0.y(),
+    //        my_line.p1.x(),
+    //        my_line.p1.y());
 
     // Check for intersections:
     bool intersects = map_line.Intersects(my_line);
@@ -104,11 +105,11 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     Vector2f intersection_point; // Return variable
     intersects = map_line.Intersection(my_line, &intersection_point);
     if (intersects) {
-      printf("Intersects at %f,%f\n", 
-             intersection_point.x(),
-             intersection_point.y());
+      // printf("Intersects at %f,%f\n", 
+      //        intersection_point.x(),
+      //        intersection_point.y());
     } else {
-      printf("No intersection\n");
+      // printf("No intersection\n");
     }
   }
 }
@@ -139,9 +140,11 @@ void ParticleFilter::Resample() {
 
   // You will need to use the uniform random number generator provided. For
   // example, to generate a random number between 0 and 1:
-  float x = rng_.UniformRandom(0, 1);
-  printf("Random number drawn from uniform distribution between 0 and 1: %f\n",
-         x);
+
+
+  // float x = rng_.UniformRandom(0, 1);
+  // printf("Random number drawn from uniform distribution between 0 and 1: %f\n",
+  //        x);
 }
 
 void ParticleFilter::ObserveLaser(const vector<float>& ranges,
@@ -164,9 +167,41 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   // You will need to use the Gaussian random number generator provided. For
   // example, to generate a random number from a Gaussian with mean 0, and
   // standard deviation 2:
-  float x = rng_.Gaussian(0.0, 2.0);
-  printf("Random number drawn from Gaussian distribution with 0 mean and "
-         "standard deviation of 2 : %f\n", x);
+  //float x = rng_.Gaussian(0.0, 2.0);
+  // printf("Random number drawn from Gaussian distribution with 0 mean and "
+  //        "standard deviation of 2 : %f\n", x);
+
+  // Particle test_prt = MotionModelSample(odom_loc, odom_angle);
+  // For each particle, update its location and angle based on the motion model. (GPU exeleration?)
+  for (size_t i = 0; i < particles_.size(); ++i) {
+    Particle temp_particle = MotionModelSample(odom_loc, odom_angle);
+    particles_[i].loc.x() = particles_[i].loc.x() + temp_particle.loc.x();
+    particles_[i].loc.y() = particles_[i].loc.y() + temp_particle.loc.y();
+    particles_[i].angle = particles_[i].angle + temp_particle.angle;
+    particles_[i].weight = temp_particle.weight;
+  }
+  prev_odom_angle_ = odom_angle;
+  prev_odom_loc_ = odom_loc;
+  ROS_INFO("loc: %f", particles_[0].loc.x());
+}
+
+Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle) {
+  float dx = odom_loc.x() - prev_odom_loc_.x();
+  float dy = odom_loc.y() - prev_odom_loc_.y();
+  float dtheta = math_util::AngleDiff(odom_angle, prev_odom_angle_);
+
+  // sample error from Gaussian distribution
+  float dx_error = rng_.Gaussian(0, k1 * sqrt(dx * dx + dy * dy) + k2 * fabs(dtheta));
+  float dy_error = rng_.Gaussian(0, k1 * sqrt(dx * dx + dy * dy) + k2 * fabs(dtheta));
+  float dtheta_error = rng_.Gaussian(0, k3 * sqrt(dx * dx + dy * dy) + k4 * fabs(dtheta));
+  
+  Particle out;
+  //Only output the d_ +  error , the error compounds over time however
+  out.loc = Eigen::Vector2f(dx + dx_error, dy + dy_error);
+  out.loc = Eigen::Vector2f(dx , dy );
+  out.angle = dtheta + dtheta_error;
+  out.weight = 1.0 / FLAGS_num_particles;
+  return out;
 }
 
 void ParticleFilter::Initialize(const string& map_file,
@@ -176,6 +211,14 @@ void ParticleFilter::Initialize(const string& map_file,
   // was received from the log. Initialize the particles accordingly, e.g. with
   // some distribution around the provided location and angle.
   map_.Load(map_file);
+
+  // Set all particles to the provided location and angle.
+  particles_.resize(FLAGS_num_particles);
+  for (size_t i = 0; i < particles_.size(); ++i) {
+    particles_[i].loc = loc;
+    particles_[i].angle = angle;
+    particles_[i].weight = 1.0 / FLAGS_num_particles;
+  }
 }
 
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
