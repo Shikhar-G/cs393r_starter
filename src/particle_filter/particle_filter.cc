@@ -59,6 +59,8 @@ ParticleFilter::ParticleFilter() :
 
 void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
+  // transform the particles to the map frame
+  
 }
 
 
@@ -158,6 +160,7 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
                              const float odom_angle) {
+                  
   // Implement the predict step of the particle filter here.
   // A new odometry value is available (in the odom frame)
   // Implement the motion model predict step here, to propagate the particles
@@ -173,8 +176,18 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
 
   // Particle test_prt = MotionModelSample(odom_loc, odom_angle);
   // For each particle, update its location and angle based on the motion model. (GPU exeleration?)
+  if (!odom_initialized_) {
+    prev_odom_loc_ = odom_loc;
+    prev_odom_angle_ = odom_angle;
+    odom_initialized_ = true;
+    return;
+  }
   for (size_t i = 0; i < particles_.size(); ++i) {
     Particle temp_particle = MotionModelSample(odom_loc, odom_angle);
+    // temp_particle.loc = r_odom_map * temp_particle.loc;
+    if (rotation_initialized_) {
+      temp_particle.loc = r_odom_map * temp_particle.loc;
+    }
     particles_[i].loc.x() = particles_[i].loc.x() + temp_particle.loc.x();
     particles_[i].loc.y() = particles_[i].loc.y() + temp_particle.loc.y();
     particles_[i].angle = particles_[i].angle + temp_particle.angle;
@@ -182,7 +195,7 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   }
   prev_odom_angle_ = odom_angle;
   prev_odom_loc_ = odom_loc;
-  ROS_INFO("loc: %f", particles_[0].loc.x());
+  // ROS_INFO("loc: %f", particles_[0].loc.x());
 }
 
 Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle) {
@@ -197,10 +210,13 @@ Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f& odom_loc, cons
   
   Particle out;
   //Only output the d_ +  error , the error compounds over time however
-  out.loc = Eigen::Vector2f(dx + dx_error, dy + dy_error);
-  out.loc = Eigen::Vector2f(dx , dy );
+  out.loc = Vector2f(dx + dx_error, dy + dy_error);  
+  out.loc = Vector2f(dx, dy);
   out.angle = dtheta + dtheta_error;
+  out.angle = dtheta;
   out.weight = 1.0 / FLAGS_num_particles;
+
+
   return out;
 }
 
@@ -218,6 +234,13 @@ void ParticleFilter::Initialize(const string& map_file,
     particles_[i].loc = loc;
     particles_[i].angle = angle;
     particles_[i].weight = 1.0 / FLAGS_num_particles;
+  }
+  // save transform from odom to this location and angle
+  if (odom_initialized_) {
+    // get rotation matrix from odom to given angle
+    r_odom_map = Eigen::Rotation2Df(math_util::AngleDiff(angle, prev_odom_angle_));
+    rotation_initialized_ = true;
+    // ROS_INFO("rotation initialized %f", r_odom_map.angle());
   }
 }
 

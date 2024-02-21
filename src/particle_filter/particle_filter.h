@@ -106,6 +106,11 @@ class ParticleFilter {
   Eigen::Vector2f prev_odom_loc_;
   float prev_odom_angle_;
   bool odom_initialized_;
+
+
+  // the rotation matrix from odom to map
+  Eigen::Rotation2Df r_odom_map;
+  bool rotation_initialized_;
   
   //particle sample, in the update step
     //CONSTANTS
