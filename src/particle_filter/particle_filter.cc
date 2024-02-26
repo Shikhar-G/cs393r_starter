@@ -79,40 +79,68 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
   // This is NOT the motion model predict step: it is the prediction of the
   // expected observations, to be used for the update step.
 
+  // Location of the laser on the robot. Assumes the laser is forward-facing.
+  const Vector2f kLaserLoc(0.2, 0);
+  Eigen::Rotation2Df car_angle(angle);
+  float angle_step = (angle_max - angle_min)/num_ranges;
+  float laser_start_angle = angle + angle_min;
+  Vector2f laser_start_loc = loc + car_angle*kLaserLoc;
   // Note: The returned values must be set using the `scan` variable:
   scan.resize(num_ranges);
   // Fill in the entries of scan using array writes, e.g. scan[i] = ...
+  float scan_angle = laser_start_angle;
   for (size_t i = 0; i < scan.size(); ++i) {
-    scan[i] = Vector2f(0, 0);
+    
+    scan[i] = Vector2f(range_max,scan_angle);
+    scan_angle += angle_step;
   }
 
   // The line segments in the map are stored in the `map_.lines` variable. You
   // can iterate through them as:
-  for (size_t i = 0; i < map_.lines.size(); ++i) {
-    const line2f map_line = map_.lines[i];
+  for (size_t j = 0; j < map_.lines.size(); ++j) {
+    const line2f map_line = map_.lines[j];
     // The line2f class has helper functions that will be useful.
     // You can create a new line segment instance as follows, for :
-    line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
+    // line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
     // Access the end points using `.p0` and `.p1` members:
     // printf("P0: %f, %f P1: %f,%f\n", 
     //        my_line.p0.x(),
     //        my_line.p0.y(),
     //        my_line.p1.x(),
     //        my_line.p1.y());
+    bool prev_high = 0;
+    bool curr_low = 0;
+    for (size_t i = 0; i < scan.size(); ++i) {
+      prev_high = curr_low;
+      Vector2f laz_vect = geometry::Heading(scan[i].y());
+      
+      // Check for intersections:
+      float distance_squared = 0;
+      Vector2f intersect_point;
+      bool intersects = geometry::RayIntersect<float>(laser_start_loc,laz_vect,map_line.p0,map_line.p1, &distance_squared, &intersect_point);//map_line.Intersects(my_line);
+      curr_low = intersects;
+      //only a period j to k in i consecutive increments of the scan will intersect with a line segment, after those individual scans pass the rest will never intersect.
+      //created an edge detection algorithm to break when this occurs.
+      if(prev_high && !curr_low) break;
 
-    // Check for intersections:
-    bool intersects = map_line.Intersects(my_line);
-    // You can also simultaneously check for intersection, and return the point
-    // of intersection:
-    Vector2f intersection_point; // Return variable
-    intersects = map_line.Intersection(my_line, &intersection_point);
-    if (intersects) {
-      // printf("Intersects at %f,%f\n", 
-      //        intersection_point.x(),
-      //        intersection_point.y());
-    } else {
-      // printf("No intersection\n");
+      float distance = sqrt(distance_squared);
+      // You can also simultaneously check for intersection, and return the point
+      // of intersection:
+      // Vector2f intersection_point; // Return variable
+      // intersects = map_line.Intersection(my_line, &intersection_point);
+      if (intersects) {
+        if(distance < scan[i].x())
+        {
+          scan[i].x() = distance;
+        }
+        printf("Intersects at %f,%f\n", 
+               intersect_point.x(),
+               intersect_point.y());
+      } else {
+        printf("No intersection\n");
+      }
     }
+    
   }
 }
 
@@ -185,12 +213,12 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
   for (size_t i = 0; i < particles_.size(); ++i) {
     Particle temp_particle = MotionModelSample(odom_loc, odom_angle);
     // temp_particle.loc = r_odom_map * temp_particle.loc;
-    if (rotation_initialized_) {
-      temp_particle.loc = r_odom_map * temp_particle.loc;
-    }
+    // if (rotation_initialized_) {
+    //   temp_particle.loc = r_odom_map * temp_particle.loc;
+    // }
     particles_[i].loc.x() = particles_[i].loc.x() + temp_particle.loc.x();
     particles_[i].loc.y() = particles_[i].loc.y() + temp_particle.loc.y();
-    particles_[i].angle = particles_[i].angle + temp_particle.angle;
+    particles_[i].angle = math_util::AngleMod(particles_[i].angle + temp_particle.angle);
     particles_[i].weight = temp_particle.weight;
   }
   prev_odom_angle_ = odom_angle;
@@ -199,8 +227,14 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
 }
 
 Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle) {
-  float dx = odom_loc.x() - prev_odom_loc_.x();
-  float dy = odom_loc.y() - prev_odom_loc_.y();
+  Eigen::Vector2f transformed_odom_loc = odom_loc;
+  Eigen::Vector2f transformed_prev_odom_loc = prev_odom_loc_;
+  if (rotation_initialized_) {
+    transformed_odom_loc = r_odom_map * odom_loc;
+    transformed_prev_odom_loc = r_odom_map * prev_odom_loc_;
+  }
+  float dx = transformed_odom_loc.x() - transformed_prev_odom_loc.x();
+  float dy = transformed_odom_loc.y() - transformed_prev_odom_loc.y();
   float dtheta = math_util::AngleDiff(odom_angle, prev_odom_angle_);
 
   // sample error from Gaussian distribution
@@ -238,21 +272,21 @@ void ParticleFilter::Initialize(const string& map_file,
   // save transform from odom to this location and angle
   if (odom_initialized_) {
     // get rotation matrix from odom to given angle
-    r_odom_map = Eigen::Rotation2Df(math_util::AngleDiff(angle, prev_odom_angle_));
+    r_odom_map = Eigen::Rotation2Df(math_util::AngleMod(angle - prev_odom_angle_ - 0.05));
     rotation_initialized_ = true;
-    // ROS_INFO("rotation initialized %f", r_odom_map.angle());
+    ROS_INFO("rotation initialized %f", r_odom_map.angle());
   }
 }
 
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
                                  float* angle_ptr) const {
-  Vector2f& loc = *loc_ptr;
-  float& angle = *angle_ptr;
+  // Vector2f& loc = *loc_ptr;
+  // float& angle = *angle_ptr;
   // Compute the best estimate of the robot's location based on the current set
   // of particles. The computed values must be set to the `loc` and `angle`
   // variables to return them. Modify the following assignments:
-  loc = Vector2f(0, 0);
-  angle = 0;
+  // loc = Vector2f(0, 0);
+  // angle = 0;
 }
 
 
