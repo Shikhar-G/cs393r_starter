@@ -155,6 +155,18 @@ void ParticleFilter::Update(const vector<float>& ranges,
   // observations for each particle, and assign weights to the particles based
   // on the observation likelihood computed by relating the observation to the
   // predicted point cloud.
+  Vector2f part_loc = p_ptr->loc;
+  float part_angle = p_ptr->angle;
+  size_t range_size = ranges.size();
+  vector<Vector2f> predicted_scan;
+  GetPredictedPointCloud(part_loc,part_angle,range_size,range_min,range_max,angle_min,angle_max,&predicted_scan);
+  double Sum_log_pdf = 0;
+  for(size_t i = 0; i < range_size; i++){
+    Sum_log_pdf += math_util::Sq((ranges[i] - predicted_scan[i].x()));
+  }
+  Sum_log_pdf *= -gamma_update/std_dev_scan_sq;
+
+  p_ptr -> weight = Sum_log_pdf;
 }
 
 void ParticleFilter::Resample() {

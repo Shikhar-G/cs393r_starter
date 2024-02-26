@@ -120,6 +120,11 @@ class ParticleFilter {
   float k4 = 1;
     //helper function: motion model sample. It takes in odom and a particle and outputs a prediction.
   Particle MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle);
+
+  //particle filter update params:
+  float std_dev_scan = 0.01;
+  float std_dev_scan_sq = math_util::Sq(std_dev_scan);
+  float gamma_update = 0.8;
 };
 }  // namespace slam
 
