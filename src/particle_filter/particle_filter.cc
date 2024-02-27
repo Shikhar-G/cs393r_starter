@@ -59,8 +59,6 @@ ParticleFilter::ParticleFilter() :
 
 void ParticleFilter::GetParticles(vector<Particle>* particles) const {
   *particles = particles_;
-  // transform the particles to the map frame
-  
 }
 
 
@@ -111,57 +109,6 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     scan[i] = min_intersect;
     scan_angle += angle_step;
   }
-  // for (size_t j = 0; j < map_.lines.size(); ++j) {
-  //   const line2f map_line = map_.lines[j];
-  //   bool prev_high = 0;
-  //   bool curr_low = 0;
-  //   for (size_t i = 0; i < scan.size(); ++i) {
-  //     prev_high = curr_low;
-  //     Vector2f laz_vect = geometry::Heading(scan[i].y());
-      
-  //     // Check for intersections:
-  //     float distance_squared = 0;
-  //     Vector2f intersect_point;
-  //     bool intersects = geometry::RayIntersect<float>(laser_start_loc,laz_vect,map_line.p0,map_line.p1, &distance_squared, &intersect_point);//map_line.Intersects(my_line);
-  //     curr_low = intersects;
-  //     //only a period j to k in i consecutive increments of the scan will intersect with a line segment, after those individual scans pass the rest will never intersect.
-  //     //created an edge detection algorithm to break when this occurs.
-  //     if(prev_high && !curr_low) break;
-
-  //     float distance = sqrt(distance_squared);
-  //     // You can also simultaneously check for intersection, and return the point
-  //     // of intersection:
-  //     // Vector2f intersection_point; // Return variable
-  //     // intersects = map_line.Intersection(my_line, &intersection_point);
-  //     if (intersects) {
-  //       if(distance < scan[i].x())
-  //       {
-  //         scan[i].x() = distance;
-  //       }
-  //       printf("Intersects at %f,%f\n", 
-  //              intersect_point.x(),
-  //              intersect_point.y());
-  //     } else {
-  //       printf("No intersection\n");
-  //     }
-  //   }
-  // }
-  
-  // The line segments in the map are stored in the `map_.lines` variable. You
-  // can iterate through them as:
-  
-    // The line2f class has helper functions that will be useful.
-    // You can create a new line segment instance as follows, for :
-    // line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
-    // Access the end points using `.p0` and `.p1` members:
-    // printf("P0: %f, %f P1: %f,%f\n", 
-    //        my_line.p0.x(),
-    //        my_line.p0.y(),
-    //        my_line.p1.x(),
-    //        my_line.p1.y());
-
-    
-  
 }
 
 void ParticleFilter::Update(const vector<float>& ranges,
@@ -245,17 +192,19 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     odom_initialized_ = true;
     return;
   }
+  vector<Particle> temp_particles = particles_;
   for (size_t i = 0; i < FLAGS_num_particles; ++i) {
     Particle temp_particle = MotionModelSample(odom_loc, odom_angle);
     // temp_particle.loc = r_odom_map * temp_particle.loc;
     // if (rotation_initialized_) {
     //   temp_particle.loc = r_odom_map * temp_particle.loc;
     // }
-    particles_[i].loc.x() = particles_[i].loc.x() + temp_particle.loc.x();
-    particles_[i].loc.y() = particles_[i].loc.y() + temp_particle.loc.y();
-    particles_[i].angle = math_util::AngleMod(particles_[i].angle + temp_particle.angle);
-    particles_[i].weight = temp_particle.weight;
+    temp_particles[i].loc.x() = temp_particles[i].loc.x() + temp_particle.loc.x();
+    temp_particles[i].loc.y() = temp_particles[i].loc.y() + temp_particle.loc.y();
+    temp_particles[i].angle = math_util::AngleMod(temp_particles[i].angle + temp_particle.angle);
+    temp_particles[i].weight = temp_particle.weight;
   }
+  particles_ = temp_particles;
   prev_odom_angle_ = odom_angle;
   prev_odom_loc_ = odom_loc;
   // ROS_INFO("loc: %f", particles_[0].loc.x());
@@ -280,10 +229,10 @@ Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f& odom_loc, cons
   Particle out;
   //Only output the d_ +  error , the error compounds over time however
   out.loc = Vector2f(dx + dx_error, dy + dy_error);  
-  out.loc = Vector2f(dx, dy);
+  // out.loc = Vector2f(dx, dy);
   out.angle = dtheta + dtheta_error;
-  out.angle = dtheta;
-  out.weight = 1.0 / FLAGS_num_particles;
+  // out.angle = dtheta;
+  out.weight = log(1.0 / FLAGS_num_particles);
 
 
   return out;
@@ -298,12 +247,15 @@ void ParticleFilter::Initialize(const string& map_file,
   map_.Load(map_file);
 
   // Set all particles to the provided location and angle.
-  particles_.resize(FLAGS_num_particles);
-  for (size_t i = 0; i < particles_.size(); ++i) {
-    particles_[i].loc = loc;
-    particles_[i].angle = angle;
-    particles_[i].weight = 1.0 / FLAGS_num_particles;
+  vector<Particle> particles;
+  particles.resize(FLAGS_num_particles);
+  for (size_t i = 0; i < FLAGS_num_particles; ++i) {
+    particles[i].loc = loc;
+    particles[i].angle = angle;
+    // weight is log likelihood
+    particles[i].weight = log(1.0 / FLAGS_num_particles);
   }
+  particles_ = particles;
   // save transform from odom to this location and angle
   if (odom_initialized_) {
     // get rotation matrix from odom to given angle
@@ -324,15 +276,20 @@ void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr,
   // Take the weighted average of the particles to get the location and angle
   Vector2f loc_sum(0, 0);
   float angle_sum = 0;
+  // Copy the particles to a temporary vect
+  vector<Particle> temp_particles = particles_;
   for (size_t i = 0; i < FLAGS_num_particles; ++i) {
-    loc_sum.x() += particles_[i].loc.x() * particles_[i].weight;
-    loc_sum.y() += particles_[i].loc.y() * particles_[i].weight;
-    angle_sum += particles_[i].angle * particles_[i].weight;
+    // stored weight is a log likelihood, so we need to exponentiate it
+
+    float weight = exp(temp_particles[i].weight);
+    loc_sum.x() += temp_particles[i].loc.x() * weight;
+    loc_sum.y() += temp_particles[i].loc.y() * weight;
+    angle_sum += temp_particles[i].angle * weight;
   }
   loc = loc_sum;
   angle = angle_sum;
-  // ROS_INFO("loc: %f %f", loc.x(), loc.y());
-  // ROS_INFO("angle: %f", angle);
+  ROS_INFO("loc: %f %f", loc.x(), loc.y());
+  ROS_INFO("angle: %f", angle);
 
   
 
