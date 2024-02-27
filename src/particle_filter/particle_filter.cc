@@ -83,22 +83,73 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
   const Vector2f kLaserLoc(0.2, 0);
   Eigen::Rotation2Df car_angle(angle);
   float angle_step = (angle_max - angle_min)/num_ranges;
-  float laser_start_angle = angle + angle_min;
-  Vector2f laser_start_loc = loc + car_angle*kLaserLoc;
+  float laser_start_angle = angle - (angle_max - angle_min)/2;
+  Vector2f laser_start_loc = loc + car_angle * kLaserLoc;
   // Note: The returned values must be set using the `scan` variable:
   scan.resize(num_ranges);
   // Fill in the entries of scan using array writes, e.g. scan[i] = ...
   float scan_angle = laser_start_angle;
   for (size_t i = 0; i < scan.size(); ++i) {
-    
-    scan[i] = Vector2f(range_max,scan_angle);
+    scan[i].x() = laser_start_loc.x() + range_max * cos(scan_angle);
+    scan[i].y() = laser_start_loc.y() + range_max * sin(scan_angle);
+    // find intersection with map
+    Vector2f min_intersect = scan[i];
+    float min_distance = range_max;
+    for (size_t j = 0; j < map_.lines.size(); ++j) {
+      const line2f map_line = map_.lines[j];
+      line2f my_line(laser_start_loc, scan[i]);
+      Vector2f intersect_point;
+      bool intersects = map_line.Intersection(my_line, &intersect_point);
+      if (intersects) {
+        float distance = (intersect_point - laser_start_loc).norm();
+        if (distance < min_distance) {
+          min_distance = distance;
+          min_intersect = intersect_point;
+        }
+      }
+    }
+    scan[i] = min_intersect;
     scan_angle += angle_step;
   }
+  // for (size_t j = 0; j < map_.lines.size(); ++j) {
+  //   const line2f map_line = map_.lines[j];
+  //   bool prev_high = 0;
+  //   bool curr_low = 0;
+  //   for (size_t i = 0; i < scan.size(); ++i) {
+  //     prev_high = curr_low;
+  //     Vector2f laz_vect = geometry::Heading(scan[i].y());
+      
+  //     // Check for intersections:
+  //     float distance_squared = 0;
+  //     Vector2f intersect_point;
+  //     bool intersects = geometry::RayIntersect<float>(laser_start_loc,laz_vect,map_line.p0,map_line.p1, &distance_squared, &intersect_point);//map_line.Intersects(my_line);
+  //     curr_low = intersects;
+  //     //only a period j to k in i consecutive increments of the scan will intersect with a line segment, after those individual scans pass the rest will never intersect.
+  //     //created an edge detection algorithm to break when this occurs.
+  //     if(prev_high && !curr_low) break;
 
+  //     float distance = sqrt(distance_squared);
+  //     // You can also simultaneously check for intersection, and return the point
+  //     // of intersection:
+  //     // Vector2f intersection_point; // Return variable
+  //     // intersects = map_line.Intersection(my_line, &intersection_point);
+  //     if (intersects) {
+  //       if(distance < scan[i].x())
+  //       {
+  //         scan[i].x() = distance;
+  //       }
+  //       printf("Intersects at %f,%f\n", 
+  //              intersect_point.x(),
+  //              intersect_point.y());
+  //     } else {
+  //       printf("No intersection\n");
+  //     }
+  //   }
+  // }
+  
   // The line segments in the map are stored in the `map_.lines` variable. You
   // can iterate through them as:
-  for (size_t j = 0; j < map_.lines.size(); ++j) {
-    const line2f map_line = map_.lines[j];
+  
     // The line2f class has helper functions that will be useful.
     // You can create a new line segment instance as follows, for :
     // line2f my_line(1, 2, 3, 4); // Line segment from (1,2) to (3.4).
@@ -108,40 +159,9 @@ void ParticleFilter::GetPredictedPointCloud(const Vector2f& loc,
     //        my_line.p0.y(),
     //        my_line.p1.x(),
     //        my_line.p1.y());
-    bool prev_high = 0;
-    bool curr_low = 0;
-    for (size_t i = 0; i < scan.size(); ++i) {
-      prev_high = curr_low;
-      Vector2f laz_vect = geometry::Heading(scan[i].y());
-      
-      // Check for intersections:
-      float distance_squared = 0;
-      Vector2f intersect_point;
-      bool intersects = geometry::RayIntersect<float>(laser_start_loc,laz_vect,map_line.p0,map_line.p1, &distance_squared, &intersect_point);//map_line.Intersects(my_line);
-      curr_low = intersects;
-      //only a period j to k in i consecutive increments of the scan will intersect with a line segment, after those individual scans pass the rest will never intersect.
-      //created an edge detection algorithm to break when this occurs.
-      if(prev_high && !curr_low) break;
 
-      float distance = sqrt(distance_squared);
-      // You can also simultaneously check for intersection, and return the point
-      // of intersection:
-      // Vector2f intersection_point; // Return variable
-      // intersects = map_line.Intersection(my_line, &intersection_point);
-      if (intersects) {
-        if(distance < scan[i].x())
-        {
-          scan[i].x() = distance;
-        }
-        printf("Intersects at %f,%f\n", 
-               intersect_point.x(),
-               intersect_point.y());
-      } else {
-        printf("No intersection\n");
-      }
-    }
     
-  }
+  
 }
 
 void ParticleFilter::Update(const vector<float>& ranges,
@@ -196,6 +216,9 @@ void ParticleFilter::ObserveLaser(const vector<float>& ranges,
                                   float angle_max) {
   // A new laser scan observation is available (in the laser frame)
   // Call the Update and Resample steps as necessary.
+  for (size_t i = 0; i < particles_.size(); ++i) {
+    Update(ranges, range_min, range_max, angle_min, angle_max, &particles_[i]);
+  }
 }
 
 void ParticleFilter::Predict(const Vector2f& odom_loc,
@@ -222,7 +245,7 @@ void ParticleFilter::Predict(const Vector2f& odom_loc,
     odom_initialized_ = true;
     return;
   }
-  for (size_t i = 0; i < particles_.size(); ++i) {
+  for (size_t i = 0; i < FLAGS_num_particles; ++i) {
     Particle temp_particle = MotionModelSample(odom_loc, odom_angle);
     // temp_particle.loc = r_odom_map * temp_particle.loc;
     // if (rotation_initialized_) {
@@ -284,7 +307,7 @@ void ParticleFilter::Initialize(const string& map_file,
   // save transform from odom to this location and angle
   if (odom_initialized_) {
     // get rotation matrix from odom to given angle
-    r_odom_map = Eigen::Rotation2Df(math_util::AngleMod(angle - prev_odom_angle_ - 0.05));
+    r_odom_map = Eigen::Rotation2Df(math_util::AngleMod(angle - prev_odom_angle_));
     rotation_initialized_ = true;
     ROS_INFO("rotation initialized %f", r_odom_map.angle());
   }
@@ -292,13 +315,27 @@ void ParticleFilter::Initialize(const string& map_file,
 
 void ParticleFilter::GetLocation(Eigen::Vector2f* loc_ptr, 
                                  float* angle_ptr) const {
-  // Vector2f& loc = *loc_ptr;
-  // float& angle = *angle_ptr;
+  Vector2f& loc = *loc_ptr;
+  float& angle = *angle_ptr;
   // Compute the best estimate of the robot's location based on the current set
   // of particles. The computed values must be set to the `loc` and `angle`
   // variables to return them. Modify the following assignments:
-  // loc = Vector2f(0, 0);
-  // angle = 0;
+  
+  // Take the weighted average of the particles to get the location and angle
+  Vector2f loc_sum(0, 0);
+  float angle_sum = 0;
+  for (size_t i = 0; i < FLAGS_num_particles; ++i) {
+    loc_sum.x() += particles_[i].loc.x() * particles_[i].weight;
+    loc_sum.y() += particles_[i].loc.y() * particles_[i].weight;
+    angle_sum += particles_[i].angle * particles_[i].weight;
+  }
+  loc = loc_sum;
+  angle = angle_sum;
+  // ROS_INFO("loc: %f %f", loc.x(), loc.y());
+  // ROS_INFO("angle: %f", angle);
+
+  
+
 }
 
 

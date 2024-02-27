@@ -110,7 +110,8 @@ void PublishParticles() {
 }
 
 void PublishPredictedScan() {
-  const uint32_t kColor = 0xd67d00;
+  // blue
+  const uint32_t kColor = 0x0000ff;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
@@ -133,6 +134,7 @@ void PublishTrajectory() {
   const uint32_t kColor = 0xadadad;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
+  ROS_INFO("Called Pub Trajectory\n");
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
   static Vector2f last_loc_(0, 0);
   if (!trajectory_points_.empty() &&
