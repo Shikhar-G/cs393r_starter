@@ -114,7 +114,7 @@ void PublishPredictedScan() {
   const uint32_t kColor = 0x0000ff;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
-  ROS_INFO("Called Pub Predicted Scan");
+  // ROS_INFO("Called Pub Predicted Scan");
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
   vector<Vector2f> predicted_scan;
   particle_filter_.GetPredictedPointCloud(
@@ -135,7 +135,7 @@ void PublishTrajectory() {
   const uint32_t kColor = 0xadadad;
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
-  ROS_INFO("Called Pub Trajectory");
+  // ROS_INFO("Called Pub Trajectory");
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
   static Vector2f last_loc_(0, 0);
   if (!trajectory_points_.empty() &&
@@ -167,7 +167,7 @@ void PublishVisualization() {
 
   PublishParticles();
   PublishPredictedScan();
-  PublishTrajectory();
+  // PublishTrajectory();
   visualization_publisher_.publish(vis_msg_);
 }
 
@@ -188,7 +188,7 @@ void LaserCallback(const sensor_msgs::LaserScan& msg) {
 void PublishLocation() {
   Vector2f robot_loc(0, 0);
   float robot_angle(0);
-  ROS_INFO("Called Pub Location");
+  // ROS_INFO("Called Pub Location");
   particle_filter_.GetLocation(&robot_loc, &robot_angle);
   localization_msg_.header.stamp = ros::Time::now();
   localization_msg_.map = current_map_;
