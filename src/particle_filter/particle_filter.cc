@@ -83,7 +83,8 @@ namespace particle_filter
     const Vector2f kLaserLoc(0.2, 0);
     Eigen::Rotation2Df car_angle(angle);
     float angle_step = (angle_max - angle_min) / num_ranges;
-    float laser_start_angle = angle - (angle_max - angle_min) / 2;
+    //this is the beginning of the predicted lidar scan which starts at angle_min! keep it this way
+    float laser_start_angle = angle + angle_min;
     Vector2f laser_start_loc = loc + car_angle * kLaserLoc;
     // Note: The returned values must be set using the `scan` variable:
     scan.resize(num_ranges);
@@ -140,17 +141,18 @@ namespace particle_filter
     float part_angle = p_ptr->angle;
 
     size_t range_size = ranges.size();
+    int range_div = 4;
     vector<Vector2f> predicted_scan;
     vector<Vector2f> predicted_scan_false;
-    GetPredictedPointCloud(part_loc, part_angle, range_size, range_min, range_max, angle_min, angle_max, &predicted_scan, true);
+    GetPredictedPointCloud(part_loc, part_angle, range_size/range_div, range_min, range_max, angle_min, angle_max, &predicted_scan, true);
     double Sum_log_pdf = 0;
-    for (size_t i = 0; i < range_size; i++)
+    for (size_t i = 0; i < range_size; i+=range_div)
     {
       //
       if (ranges[i] >= range_max && ranges[i] <= range_min)
         continue;
       
-      Sum_log_pdf += math_util::Sq(predicted_scan[i].x() - ranges[i]) / (std_dev_scan_sq);
+      Sum_log_pdf += math_util::Sq(predicted_scan[i/range_div].x() - ranges[i]) / (std_dev_scan_sq);
       // ROS_INFO("ranges[i]: %f", ranges[i]);
       // ROS_INFO("x for true: %f", predicted_scan[i].x());
     }
@@ -237,7 +239,9 @@ namespace particle_filter
     {
       particles_[i].weight = particles_[i].weight - w_max;
     }
-    Resample();
+
+    if(n_resample_count > n_resample) {Resample(); n_resample_count = 0;}
+    n_resample_count++;
   }
 
   void ParticleFilter::Predict(const Vector2f &odom_loc,

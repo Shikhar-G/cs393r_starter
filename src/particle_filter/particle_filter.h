@@ -125,7 +125,11 @@ class ParticleFilter {
   //particle filter update params:
   float std_dev_scan = 0.01;
   float std_dev_scan_sq = math_util::Sq(std_dev_scan);
-  float gamma_update = 0.8;
+  float gamma_update = 0.6;
+
+  //resample counters
+  int n_resample = 3;
+  int n_resample_count = 0;
 };
 }  // namespace slam
 
