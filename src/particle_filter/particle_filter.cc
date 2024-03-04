@@ -70,7 +70,7 @@ namespace particle_filter
                                               float angle_min,
                                               float angle_max,
                                               vector<Vector2f> *scan_ptr,
-                                              bool get_ranges)
+                                              bool cartesian)
   {
     vector<Vector2f> &scan = *scan_ptr;
     // Compute what the predicted point cloud would be, if the car was at the pose
@@ -85,11 +85,32 @@ namespace particle_filter
     float angle_step = (angle_max - angle_min) / num_ranges;
     //this is the beginning of the predicted lidar scan which starts at angle_min! keep it this way
     float laser_start_angle = angle + angle_min;
+    // float laser_end_angle = angle + angle_max;
     Vector2f laser_start_loc = loc + car_angle * kLaserLoc;
     // Note: The returned values must be set using the `scan` variable:
     scan.resize(num_ranges);
     // Fill in the entries of scan using array writes, e.g. scan[i] = ...
     float scan_angle = laser_start_angle;
+    vector<float> range_ptr;
+    // map_.GetPredictedScan(laser_start_loc, range_min, range_max, laser_start_angle, laser_start_angle + angle_max, num_ranges, &range_ptr);
+    // for (size_t i = 0; i < range_ptr.size(); ++i)
+    // {
+    //   if (cartesian)
+    //   {
+    //     scan[i].x() = range_ptr[i] * cos(laser_start_angle + i * angle_step);
+    //     scan[i].y() = range_ptr[i] * sin(laser_start_angle + i * angle_step);
+    //   }
+    //   else
+    //   {
+    //     scan[i] = Vector2f(range_ptr[i], laser_start_angle + i * angle_step);
+    //   }
+    
+    if (dist_traveled > set_distance || eligible_lines.size() == 0)                    
+    {
+      map_.GetSceneLines(laser_start_loc, range_max, &eligible_lines);
+    }
+    // vector<line2f> local_map_lines = eligible_lines;
+
     for (size_t i = 0; i < scan.size(); ++i)
     {
       scan[i].x() = laser_start_loc.x() + range_max * cos(scan_angle);
@@ -97,9 +118,8 @@ namespace particle_filter
       // find intersection with map
       Vector2f min_intersect = scan[i];
       float min_distance = range_max;
-      for (size_t j = 0; j < map_.lines.size(); ++j)
-      {
-        const line2f map_line = map_.lines[j];
+      for (size_t j = 0; j < eligible_lines.size(); ++j) {
+        const line2f map_line = eligible_lines[j];
         line2f my_line(laser_start_loc, scan[i]);
         Vector2f intersect_point;
         bool intersects = map_line.Intersection(my_line, &intersect_point);
@@ -113,13 +133,13 @@ namespace particle_filter
           }
         }
       }
-      if (get_ranges)
+      if (cartesian)
       {
-        scan[i] = Vector2f(min_distance, scan_angle);
+        scan[i] = min_intersect;
       }
       else
       {
-        scan[i] = min_intersect;
+        scan[i] = Vector2f(min_distance, scan_angle);
       }
       scan_angle += angle_step;
     }
@@ -144,7 +164,7 @@ namespace particle_filter
     int range_div = 4;
     vector<Vector2f> predicted_scan;
     vector<Vector2f> predicted_scan_false;
-    GetPredictedPointCloud(part_loc, part_angle, range_size/range_div, range_min, range_max, angle_min, angle_max, &predicted_scan, true);
+    GetPredictedPointCloud(part_loc, part_angle, range_size/range_div, range_min, range_max, angle_min, angle_max, &predicted_scan, false);
     double Sum_log_pdf = 0;
     for (size_t i = 0; i < range_size; i+=range_div)
     {
@@ -232,6 +252,7 @@ namespace particle_filter
   {
     // A new laser scan observation is available (in the laser frame)
     // Call the Update and Resample steps as necessary.
+    if (dist_traveled < set_distance) {return;}
     float w_max = -INFINITY;
     for (size_t i = 0; i < particles_.size(); ++i)
     {
@@ -249,6 +270,9 @@ namespace particle_filter
 
     if(n_resample_count > n_resample) {Resample(); n_resample_count = 0;}
     n_resample_count++;
+    dist_traveled = 0;
+
+    
   }
 
   void ParticleFilter::Predict(const Vector2f &odom_loc,
@@ -286,11 +310,12 @@ namespace particle_filter
       // }
       temp_particles[i].loc.x() = temp_particles[i].loc.x() + temp_particle.loc.x();
       temp_particles[i].loc.y() = temp_particles[i].loc.y() + temp_particle.loc.y();
-      temp_particles[i].angle = math_util::AngleMod(temp_particles[i].angle + temp_particle.angle);
+      temp_particles[i].angle = temp_particles[i].angle + temp_particle.angle;
       temp_particles[i].weight = temp_particle.weight;
     }
     particles_ = temp_particles;
     prev_odom_angle_ = odom_angle;
+    dist_traveled += (odom_loc - prev_odom_loc_).norm();
     prev_odom_loc_ = odom_loc;
     // ROS_INFO("loc: %f", particles_[0].loc.x());
   }
@@ -344,6 +369,8 @@ namespace particle_filter
       particles[i].weight = log(1.0 / FLAGS_num_particles);
     }
     particles_ = particles;
+    dist_traveled = 0;
+    // map_.GetSceneLines(loc,10,&eligible_lines);
     // save transform from odom to this location and angle
     if (odom_initialized_)
     {

@@ -90,7 +90,7 @@ class ParticleFilter {
                               float angle_min,
                               float angle_max,
                               std::vector<Eigen::Vector2f>* scan,
-                              bool get_ranges = false);
+                              bool cartesian = true);
 
  private:
 
@@ -99,6 +99,9 @@ class ParticleFilter {
 
   // Map of the environment.
   vector_map::VectorMap map_;
+  // Current eligible lines of the map;
+  std::vector<geometry::line2f> eligible_lines;
+  bool map_lines_initialized_;
 
   // Random number generator.
   util_random::Random rng_;
@@ -126,12 +129,16 @@ class ParticleFilter {
   float std_dev_scan = 0.01;
   float std_dev_scan_sq = math_util::Sq(std_dev_scan);
   float gamma_update = 0.6;
-  float d_short = 0.4;
-  float d_long = 1;
+  float d_short = 0.3;
+  float d_long = 0.8;
 
   //resample counters
   int n_resample = 3;
   int n_resample_count = 0;
+
+  // distance tracker
+  float dist_traveled = 0;
+  float set_distance = 0.2;
 };
 }  // namespace slam
 
