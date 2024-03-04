@@ -149,16 +149,23 @@ namespace particle_filter
     for (size_t i = 0; i < range_size; i+=range_div)
     {
       //
-      if (ranges[i] >= range_max && ranges[i] <= range_min)
+      if (ranges[i] > range_max || ranges[i] < range_min){
         continue;
+      } else if(ranges[i] < predicted_scan[i/range_div].x() - d_short) {
+        Sum_log_pdf += math_util::Sq(d_short) / (std_dev_scan_sq);
+      } else if(ranges[i] > predicted_scan[i/range_div].x() + d_long){
+        Sum_log_pdf += math_util::Sq(d_long) / (std_dev_scan_sq);
+      } else {
+        Sum_log_pdf += math_util::Sq(predicted_scan[i/range_div].x() - ranges[i]) / (std_dev_scan_sq);
+      }
       
-      Sum_log_pdf += math_util::Sq(predicted_scan[i/range_div].x() - ranges[i]) / (std_dev_scan_sq);
+      
       // ROS_INFO("ranges[i]: %f", ranges[i]);
       // ROS_INFO("x for true: %f", predicted_scan[i].x());
     }
     Sum_log_pdf *= -gamma_update;
 
-    p_ptr->weight = Sum_log_pdf;
+    p_ptr->weight = p_ptr->weight + Sum_log_pdf;
   }
 
   void ParticleFilter::Resample()

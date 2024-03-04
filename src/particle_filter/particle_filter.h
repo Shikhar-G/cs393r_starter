@@ -126,6 +126,8 @@ class ParticleFilter {
   float std_dev_scan = 0.01;
   float std_dev_scan_sq = math_util::Sq(std_dev_scan);
   float gamma_update = 0.6;
+  float d_short = 0.4;
+  float d_long = 1;
 
   //resample counters
   int n_resample = 3;
