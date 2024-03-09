@@ -46,7 +46,7 @@ using std::swap;
 using std::vector;
 using vector_map::VectorMap;
 
-DEFINE_double(num_particles, 50, "Number of particles");
+DEFINE_double(num_particles, 25, "Number of particles");
 
 namespace particle_filter
 {
@@ -161,7 +161,7 @@ namespace particle_filter
     float part_angle = p_ptr->angle;
 
     size_t range_size = ranges.size();
-    int range_div = 4;
+    int range_div = 2;
     vector<Vector2f> predicted_scan;
     vector<Vector2f> predicted_scan_false;
     GetPredictedPointCloud(part_loc, part_angle, range_size/range_div, range_min, range_max, angle_min, angle_max, &predicted_scan, false);
@@ -169,7 +169,7 @@ namespace particle_filter
     for (size_t i = 0; i < range_size; i+=range_div)
     {
       //
-      if (ranges[i] > range_max || ranges[i] < range_min){
+      if (ranges[i] > range_max || ranges[i] < range_min || predicted_scan[i/range_div].x() >= range_max || predicted_scan[i/range_div].x() <= range_min){
         continue;
       } else if(ranges[i] < predicted_scan[i/range_div].x() - d_short) {
         Sum_log_pdf += math_util::Sq(d_short) / (std_dev_scan_sq);
@@ -220,7 +220,7 @@ namespace particle_filter
     // resampling
     for (size_t i = 0; i < FLAGS_num_particles; ++i)
     {
-      particles_[j].weight = log(1.0 / FLAGS_num_particles);
+      // particles_[j].weight = log(1.0 / FLAGS_num_particles);
       new_particles.push_back(particles_[j]);
       // go forward by step
       curr_weight += step;
@@ -254,6 +254,8 @@ namespace particle_filter
     // Call the Update and Resample steps as necessary.
     if (dist_traveled < set_distance) {return;}
     float w_max = -INFINITY;
+    // int w_min_index = 0;
+    float w_min = INFINITY;
     for (size_t i = 0; i < particles_.size(); ++i)
     {
       Update(ranges, range_min, range_max, angle_min, angle_max, &particles_[i]);
@@ -261,14 +263,27 @@ namespace particle_filter
       {
         w_max = particles_[i].weight;
       }
+      if (particles_[i].weight < w_min)
+      {
+        w_min = particles_[i].weight;
+        // w_min_index = i;
+      }
     }
+    float particles_sum = 0;
     // normalize weights
     for (size_t i = 0; i < particles_.size(); ++i)
     {
       particles_[i].weight = particles_[i].weight - w_max;
+      particles_sum += particles_[i].weight;
     }
 
-    if(n_resample_count > n_resample) {Resample(); n_resample_count = 0;}
+    float particles_average = particles_sum/particles_.size();
+    float range_center = (w_max + w_min) /2;
+    float diff = abs(particles_average - range_center);
+    float total_part_range = abs(w_max - w_min);
+    float diff_over_total = diff/total_part_range;
+    
+    if(n_resample_count > n_resample && diff_over_total > 0.3) {Resample(); n_resample_count = 0;}
     n_resample_count++;
     dist_traveled = 0;
 
@@ -300,6 +315,14 @@ namespace particle_filter
       odom_initialized_ = true;
       return;
     }
+    // Eigen::Vector2f transformed_odom_loc = odom_loc;
+    // Eigen::Vector2f transformed_prev_odom_loc = prev_odom_loc_;
+    // if (rotation_initialized_)
+    // {
+    //   transformed_odom_loc = r_odom_map * odom_loc;
+    //   transformed_prev_odom_loc = r_odom_map * prev_odom_loc_;
+    // }
+    
     vector<Particle> temp_particles = particles_;
     for (size_t i = 0; i < FLAGS_num_particles; ++i)
     {
@@ -313,6 +336,12 @@ namespace particle_filter
       temp_particles[i].angle = temp_particles[i].angle + temp_particle.angle;
       temp_particles[i].weight = temp_particle.weight;
     }
+
+    // temp_particles[FLAGS_num_particles - 1].loc.x() = transformed_odom_loc.x() - transformed_prev_odom_loc.x();
+    // temp_particles[FLAGS_num_particles - 1].loc.y() = transformed_odom_loc.y() - transformed_prev_odom_loc.y();
+    // temp_particles[FLAGS_num_particles - 1].angle = math_util::AngleDiff(odom_angle, prev_odom_angle_);
+    // temp_particles[FLAGS_num_particles - 1].weight = log(1.0 / FLAGS_num_particles);
+    
     particles_ = temp_particles;
     prev_odom_angle_ = odom_angle;
     dist_traveled += (odom_loc - prev_odom_loc_).norm();
@@ -348,6 +377,68 @@ namespace particle_filter
 
     return out;
   }
+  // Particle ParticleFilter::MotionModelSample(const Eigen::Vector2f &odom_loc, const float odom_angle)
+  // {
+  //   Eigen::Vector2f transformed_odom_loc = odom_loc;
+  //   Eigen::Vector2f transformed_prev_odom_loc = prev_odom_loc_;
+  //   if (rotation_initialized_)
+  //   {
+  //     transformed_odom_loc = r_odom_map * odom_loc;
+  //     transformed_prev_odom_loc = r_odom_map * prev_odom_loc_;
+  //   }
+  //   float dx = transformed_odom_loc.x() - transformed_prev_odom_loc.x();
+  //   float dy = transformed_odom_loc.y() - transformed_prev_odom_loc.y();
+  //   float dtheta = math_util::AngleDiff(odom_angle, prev_odom_angle_);
+  //   if(dtheta != 0){
+  //   float radius_turn = sqrt(dx * dx + dy * dy)/sin(dtheta/2)/2;
+  //   float arc_length = dtheta*radius_turn/(2*M_PI);
+  //   //sample theta gaussian first
+  //   float steering_angle = atan2(WHEELBASE,radius_turn);
+  //   float steering_angle_err = rng_.Gaussian(0, k4 * fabs(steering_angle));
+  //   float out_angle = steering_angle + steering_angle_err;
+  //   // sample the arc length
+  //   float darc_error = rng_.Gaussian(0, k1 * arc_length);
+  //   float arc_out = arc_length + darc_error;
+
+  //   // output radius of turning and theta
+  //   float out_radius = WHEELBASE/tan(out_angle);
+  //   float out_theta = 2*M_PI*arc_out/out_radius;
+  //   // sample error from Gaussian distribution
+  //   float dtheta_error = out_theta;
+  //   float dx_error = (-(dx < 0) + (dx > 0))*out_radius*sin(out_theta);
+  //   float z = 2*out_radius*sin(out_theta/2);
+  //   float dy_error = (-(dy < 0) + (dy > 0))*sqrt(z*z - dx_error*dx_error);
+  //   ROS_INFO("radius turn:%f",out_radius);
+    
+
+  //   Particle out;
+  //   // Only output the d_ +  error , the error compounds over time however
+  //   out.loc = Vector2f(dx_error, dy_error);
+  //   // out.loc = Vector2f(dx, dy);
+  //   out.angle = dtheta_error;
+  //   // out.angle = dtheta;
+  //   out.weight = log(1.0 / FLAGS_num_particles);
+
+  //   return out;
+  //   } else {
+  //       // sample error from Gaussian distribution
+  //   float dx_error = rng_.Gaussian(0, k1 * sqrt(dx * dx + dy * dy) + k2 * fabs(dtheta));
+  //   float dy_error = rng_.Gaussian(0, k1 * sqrt(dx * dx + dy * dy) + k2 * fabs(dtheta));
+  //   float dtheta_error = rng_.Gaussian(0, k3 * sqrt(dx * dx + dy * dy) + k4 * fabs(dtheta));
+
+  //   Particle out;
+  //   // Only output the d_ +  error , the error compounds over time however
+  //   out.loc = Vector2f(dx + dx_error, dy + dy_error);
+  //   // out.loc = Vector2f(dx, dy);
+  //   out.angle = dtheta + dtheta_error;
+  //   // out.angle = dtheta;
+  //   out.weight = log(1.0 / FLAGS_num_particles);
+
+  //   return out;
+
+  //   }
+  // }
+
 
   void ParticleFilter::Initialize(const string &map_file,
                                   const Vector2f &loc,

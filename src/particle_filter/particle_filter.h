@@ -118,22 +118,23 @@ class ParticleFilter {
   
   //particle sample, in the update step
     //CONSTANTS
-  float k1 = 1;
-  float k2 = 0.01;
-  float k3 = 0.25;
-  float k4 = 1;
+  float k1 = 0.6; //distance error
+  float k2 = 0.2; //rotation variance in distance error
+  float k3 = 0.2;//distance variance in rotation error
+  float k4 = 0.2; //rotation error
     //helper function: motion model sample. It takes in odom and a particle and outputs a prediction.
   Particle MotionModelSample(const Eigen::Vector2f& odom_loc, const float odom_angle);
-
+  // Wheelbase constant
+    const float WHEELBASE = 0.324;
   //particle filter update params:
-  float std_dev_scan = 0.01;
+  float std_dev_scan = 0.03;
   float std_dev_scan_sq = math_util::Sq(std_dev_scan);
-  float gamma_update = 0.6;
+  float gamma_update = 0.7;
   float d_short = 0.3;
   float d_long = 0.8;
 
   //resample counters
-  int n_resample = 3;
+  int n_resample = 1;
   int n_resample_count = 0;
 
   // distance tracker
