@@ -166,9 +166,13 @@ namespace particle_filter
     vector<Vector2f> predicted_scan_false;
     GetPredictedPointCloud(part_loc, part_angle, range_size/range_div, range_min, range_max, angle_min, angle_max, &predicted_scan, false);
     double Sum_log_pdf = 0;
+    // bool bad_particle = false;
     for (size_t i = 0; i < range_size; i+=range_div)
     {
       //
+      // if (predicted_scan[i/range_div].x() <= TOO_CLOSE_RANGE){
+      //   bad_particle = true;
+      // }
       if (ranges[i] > range_max || ranges[i] < range_min || predicted_scan[i/range_div].x() >= range_max || predicted_scan[i/range_div].x() <= range_min){
         continue;
       } else if(ranges[i] < predicted_scan[i/range_div].x() - d_short) {
@@ -186,6 +190,11 @@ namespace particle_filter
     Sum_log_pdf *= -gamma_update;
 
     p_ptr->weight = p_ptr->weight + Sum_log_pdf;
+    // if(bad_particle){
+    //   // bad_particles_.push_back(p_ptr);
+    // }else {
+    //   // good_particles_.push_back(p_ptr);
+    // }
   }
 
   void ParticleFilter::Resample()
@@ -256,34 +265,56 @@ namespace particle_filter
     float w_max = -INFINITY;
     // int w_min_index = 0;
     float w_min = INFINITY;
-    for (size_t i = 0; i < particles_.size(); ++i)
+    //update the particles
+    // printf("gets to line 268");
+    vector<Particle> temp_particles = particles_;
+    for (size_t i = 0; i < temp_particles.size(); ++i)
     {
-      Update(ranges, range_min, range_max, angle_min, angle_max, &particles_[i]);
-      if (particles_[i].weight > w_max)
+      Update(ranges, range_min, range_max, angle_min, angle_max, &temp_particles[i]);
+    }
+    // printf("gets to line 273");
+    //update has found the good and bad particles, change the bad particles to a random good particle.
+    // for (size_t i = 0; i < bad_particles_.size() && good_particles_.size() > 0; ++i)
+    // {
+    //   Particle good_particle = *good_particles_[rng_.RandomInt(0,(int)(good_particles_.size()) - 1)];
+    //   bad_particles_[i] -> loc = good_particle.loc;
+    //   bad_particles_[i] -> angle = good_particle.angle;
+    //   bad_particles_[i] -> weight = good_particle.weight;
+
+    // }
+    // good_particles_.clear();
+    // bad_particles_.clear();
+    //find the min and max values for weights
+    for (size_t i = 0; i < temp_particles.size(); ++i)
+    {
+      if (temp_particles[i].weight > w_max)
       {
-        w_max = particles_[i].weight;
+        w_max = temp_particles[i].weight;
       }
-      if (particles_[i].weight < w_min)
+      if (temp_particles[i].weight < w_min)
       {
-        w_min = particles_[i].weight;
+        w_min = temp_particles[i].weight;
         // w_min_index = i;
       }
     }
+
     float particles_sum = 0;
     // normalize weights
-    for (size_t i = 0; i < particles_.size(); ++i)
+    for (size_t i = 0; i < temp_particles.size(); ++i)
     {
-      particles_[i].weight = particles_[i].weight - w_max;
-      particles_sum += particles_[i].weight;
+      temp_particles[i].weight = temp_particles[i].weight - w_max;
+      particles_sum += temp_particles[i].weight;
     }
+    //assign temp to actual
+    particles_ = temp_particles;
 
-    float particles_average = particles_sum/particles_.size();
+    float particles_average = particles_sum/temp_particles.size();
     float range_center = (w_max + w_min) /2;
     float diff = abs(particles_average - range_center);
     float total_part_range = abs(w_max - w_min);
     float diff_over_total = diff/total_part_range;
-    
-    if(n_resample_count > n_resample && diff_over_total > 0.3) {Resample(); n_resample_count = 0;}
+    // printf("diff_over_total:%f\n", diff_over_total);
+    if(n_resample_count > n_resample && diff_over_total > 0.3 && diff_over_total < 4) {Resample(); n_resample_count = 0;}
     n_resample_count++;
     dist_traveled = 0;
 
@@ -307,7 +338,7 @@ namespace particle_filter
     //        "standard deviation of 2 : %f\n", x);
 
     // Particle test_prt = MotionModelSample(odom_loc, odom_angle);
-    // For each particle, update its location and angle based on the motion model. (GPU exeleration?)
+    // For each particle, update its location and angle based on the motion model. (GPU acceleration?)
     if (!odom_initialized_)
     {
       prev_odom_loc_ = odom_loc;
