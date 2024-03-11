@@ -96,10 +96,7 @@ class ParticleFilter {
 
   // List of particles being tracked.
   std::vector<Particle> particles_;
-  //testing for good particles not in walls and bad ones in walls
-  // std::vector<Particle*> good_particles_;
-  // std::vector<Particle*> bad_particles_; 
-  // float TOO_CLOSE_RANGE = 0.2;
+
   // Map of the environment.
   vector_map::VectorMap map_;
   // Current eligible lines of the map;
