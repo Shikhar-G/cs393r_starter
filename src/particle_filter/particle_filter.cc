@@ -193,11 +193,12 @@ namespace particle_filter
     // Create a variable to store the new particles, and when done, replace the
     // old set of particles:
     vector<Particle> new_particles;
+    vector<Particle> temp_particles = particles_;
     vector<double> weights;
     double weight_sum = 0;
     for (size_t i = 0; i < FLAGS_num_particles; ++i)
     {
-      weight_sum += exp(particles_[i].weight);
+      weight_sum += exp(temp_particles[i].weight);
       weights.push_back(weight_sum);
     }
     // choose a random starting location
@@ -219,7 +220,11 @@ namespace particle_filter
     for (size_t i = 0; i < FLAGS_num_particles; ++i)
     {
       // particles_[j].weight = log(1.0 / FLAGS_num_particles);
-      new_particles.push_back(particles_[j]);
+      Particle new_particle;
+      new_particle.loc = temp_particles[j].loc;
+      new_particle.angle = temp_particles[j].angle;
+      new_particle.weight = log(1.0 / FLAGS_num_particles);
+      new_particles.push_back(new_particle);
       // go forward by step
       curr_weight += step;
       // wrap around
@@ -238,6 +243,7 @@ namespace particle_filter
       }
     }
     particles_ = new_particles;
+
   }
 
   void ParticleFilter::ObserveLaser(const vector<float> &ranges,
@@ -281,7 +287,6 @@ namespace particle_filter
       temp_particles[i].weight = temp_particles[i].weight - w_max;
       particles_sum += temp_particles[i].weight;
     }
-    // assign temp to actual
     particles_ = temp_particles;
     // something for the resample rate, works better than anything else I've implemented but the math is sketchy
     float particles_average = particles_sum / temp_particles.size();
