@@ -68,7 +68,8 @@ class RRT_Star : public Planner{
         bool IsCollision(const Eigen::Vector2f& start, const Eigen::Vector2f& end);
         void Rewire(size_t nearest_vertex_new_index, const Eigen::Vector2f& new_vertex, const vector<size_t>& nearby_vertices);
         float Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end);
-
+        size_t FindNearestVertexInRadius(const Eigen::Vector2f& point, size_t nearest_vertex_index, const vector<size_t>& vertices_in_radius);
+        vector<size_t> FindVerticesInRadius(const Eigen::Vector2f& point, double radius);
         
     public:
         //initialization

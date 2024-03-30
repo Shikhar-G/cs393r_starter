@@ -7,6 +7,8 @@
 #include "glog/logging.h"
 #include "ros/ros.h"
 #include "ros/package.h"
+#include <algorithm>
+#include <vector>
 
 namespace planner {
 
@@ -33,7 +35,7 @@ namespace planner {
         max_y_ = max_y;
     }
 
-    RRT_Star::Plan() {
+    void RRT_Star::Plan() {
         // Reset the tree
         vertices_.clear();
         edges_.clear();
@@ -54,7 +56,7 @@ namespace planner {
             // Steer towards the random point
             Eigen::Vector2f new_vertex = Steer(nearest_vertex_index, random_point);
             // Check if the new vertex is valid
-            if (!IsCollision(nearest_vertex_index, new_vertex))
+            if (!IsCollision(vertices_[nearest_vertex_index], new_vertex))
             {
                 // Find the nearest vertex to the new vertex
                 vector<size_t> vertices_in_radius = FindVerticesInRadius(new_vertex, radius_);
@@ -73,7 +75,7 @@ namespace planner {
                 // Rewire the tree
                 Rewire(nearest_vertex_new, new_vertex, vertices_in_radius);
                 // Check if the goal is reached
-                if ((new_vertex - goal_).norm() < goal_threshold_)
+                if ((new_vertex - goal_).norm() < goal_radius_)
                 {
                     // Set the goal index if goal is not reached yet or the new vertex has a lower cost
                     if (!goal_reached || costs_.back() < costs_[goal_index_]) {
@@ -90,8 +92,8 @@ namespace planner {
         
         size_t curr_vertex = goal_index_;
         //push goal to path.
-        path_out.push_back(vertices_[curr_vertex]);
         vector<Eigen::Vector2f> path_out;
+        path_out.push_back(vertices_[curr_vertex]);
 
         //starting from the goal work backwards to the start
         while (curr_vertex != 0)
@@ -103,10 +105,11 @@ namespace planner {
             path_out.push_back(vertices_[curr_vertex]);
         }
         //the path goes from goal to start right now, reverse it
-        return std::reverse(path_out.begin(),path_out.end());
+        std::reverse(path_out.begin(),path_out.end());
+        return path_out;
     }
 
-    float RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2& end)
+    float RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end)
     {
         return (start - end).norm();
     }
@@ -144,9 +147,9 @@ namespace planner {
         return nearest + direction * step_size_;
     }
 
-    bool RRT_Star::IsCollision(size_t nearest_vertex_index, const Eigen::Vector2f& new_vertex)
+    bool RRT_Star::IsCollision(const Eigen::Vector2f& start, const Eigen::Vector2f& end)
     {
-        return vector_map_.Intersects(vertices_[nearest_vertex_index], new_vertex);
+        return vector_map_.Intersects(start, end);
     }
 
     vector<size_t> RRT_Star::FindVerticesInRadius(const Eigen::Vector2f& point, double radius)
@@ -167,7 +170,7 @@ namespace planner {
         double min_cost = costs_[nearest_vertex_index];
         for (size_t i : vertices_in_radius)
         {
-            if (!isCollision(i, point))
+            if (!IsCollision(vertices_[i], point))
             {
                 double cost = costs_[i] + Cost(vertices_[i], point);
                 if (cost < min_cost)
@@ -182,13 +185,13 @@ namespace planner {
 
 
 
-    void RRT_Star::Rewire(size_t nearest_vertex_new_index, const Eigen::Vector2f& new_vertex, vector<size_t> vertices_in_radius)
+    void RRT_Star::Rewire(size_t nearest_vertex_new_index, const Eigen::Vector2f& new_vertex,const vector<size_t>& vertices_in_radius)
     {
         for(auto & vertex_near : vertices_in_radius)
         {
             if(IsCollision(vertices_[vertex_near],new_vertex)) continue;
 
-            float cost = costs_[nearest_vertex_new_index] + Cost(new_vertex - vertices_[vertex_near]);
+            float cost = costs_[nearest_vertex_new_index] + Cost(new_vertex, vertices_[vertex_near]);
             if(cost < costs_[vertex_near])
             {
                 costs_[vertex_near] = cost;
