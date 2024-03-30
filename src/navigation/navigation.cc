@@ -86,10 +86,12 @@ namespace navigation
 
   void Navigation::SetNavGoal(const Vector2f &loc, float angle)
   {
+    // Reset any existing navigation goal and reset indicator variables.
     // Set the navigation goal.
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
     nav_complete_ = false;
+    // Get planned path (another callback).
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)

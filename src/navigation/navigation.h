@@ -27,6 +27,8 @@
 
 #include "simple_queue.h"
 
+#include "global_planner.h"
+
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
