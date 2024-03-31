@@ -53,13 +53,14 @@ class RRT_Star : public Planner{
         vector<float> costs_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
-        size_t num_iterations_ = 10000;
+        size_t num_iterations_ = 100000;
         float min_x_;
         float max_x_;
         float min_y_;
         float max_y_;
         float radius_ = 5;
         float step_size_ = 0.5;
+        float safety_margin_ = 0.2;
 
         Eigen::Vector2f SampleRandomPoint();
         size_t FindNearestVertex(const Eigen::Vector2f& point);

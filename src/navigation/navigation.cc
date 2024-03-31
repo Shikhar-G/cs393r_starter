@@ -112,21 +112,21 @@ namespace navigation
   void Navigation::PublishGlobalPlanner() {
   const uint32_t kColor = 0x702963;
 
-  vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
-  for (size_t i = 0; i < tree.size(); ++i) {
-    DrawLine(tree[i].first,
-             tree[i].second,
+  // vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
+  // for (size_t i = 0; i < tree.size(); ++i) {
+  //   DrawLine(tree[i].first,
+  //            tree[i].second,
+  //            kColor,
+  //            global_viz_msg_);
+  // }
+
+  for (size_t i = 0; i + 1 < path_.size(); ++i) {
+    printf("[%ld] path x: %f path y: %f\n",i,path_[i].x(),path_[i].y());
+    DrawLine(path_[i],
+             path_[i + 1],
              kColor,
              global_viz_msg_);
   }
-
-  // for (size_t i = 0; i + 1 < path_.size(); ++i) {
-  //   printf("[%ld] path x: %f path y: %f\n",i,path_[i].x(),path_[i].y());
-  //   DrawLine(path_[i],
-  //            path_[i + 1],
-  //            kColor,
-  //            global_viz_msg_);
-  
 }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)

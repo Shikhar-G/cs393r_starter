@@ -1,6 +1,7 @@
 
 
 #include "global_planner.h"
+#include "shared/math/geometry.h"
 #include "gflags/gflags.h"
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Geometry"
@@ -51,6 +52,11 @@ namespace planner {
         {
             // Sample a random point
             Eigen::Vector2f random_point = SampleRandomPoint();
+            // Make sure the random point is not too close to any wall
+            if (!IsValidVertex(random_point))
+            {
+                continue;
+            }
             // Find the nearest vertex
             size_t nearest_vertex_index = FindNearestVertex(random_point);
             // Steer towards the random point
@@ -85,6 +91,11 @@ namespace planner {
                 }
             }
         }
+    }
+
+    bool RRT_Star::IsValidVertex(const Eigen::Vector2f& vertex)
+    {
+        return !IsCollision(vertex, vertex);
     }
 
     vector<Eigen::Vector2f> RRT_Star::GetPath()
@@ -149,7 +160,15 @@ namespace planner {
 
     bool RRT_Star::IsCollision(const Eigen::Vector2f& start, const Eigen::Vector2f& end)
     {
-        if 
+        // check if lines are within safety margin of each other or intersect
+        for (const auto& line : vector_map_->lines)
+        {
+            if (line.CloserThan(start, end, safety_margin_))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     vector<size_t> RRT_Star::FindVerticesInRadius(const Eigen::Vector2f& point, double radius)
@@ -184,20 +203,22 @@ namespace planner {
     }
 
 
-
     void RRT_Star::Rewire(size_t nearest_vertex_new_index, const Eigen::Vector2f& new_vertex,const vector<size_t>& vertices_in_radius)
     {
-        for(auto & vertex_near : vertices_in_radius)
+        for(size_t vertex_near : vertices_in_radius)
         {
-            if(IsCollision(vertices_[vertex_near],new_vertex)) continue;
-
-            float cost = costs_[nearest_vertex_new_index] + Cost(new_vertex, vertices_[vertex_near]);
-            if(cost < costs_[vertex_near])
+            if(!IsCollision(vertices_[vertex_near],new_vertex) && !IsCollision(vertices_[nearest_vertex_new_index], vertices_[vertex_near]))
             {
-                costs_[vertex_near] = cost;
-                parents_[vertex_near] = nearest_vertex_new_index;
-                edges_[nearest_vertex_new_index].push_back(vertex_near);
+                float cost = costs_[nearest_vertex_new_index] + Cost(new_vertex, vertices_[vertex_near]);
+                // Make sure new edges would not collide with any wall
+                if(cost < costs_[vertex_near])
+                {
+                    costs_[vertex_near] = cost;
+                    parents_[vertex_near] = nearest_vertex_new_index;
+                    edges_[nearest_vertex_new_index].push_back(vertex_near);
+                }
             }
+
         }
     }
 
