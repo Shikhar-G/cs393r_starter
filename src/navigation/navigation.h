@@ -152,6 +152,12 @@ namespace navigation
     std::vector<Eigen::Vector2f> TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange);
 
     float ScorePaths(float closest_approach, float free_path_length, float w1);
+
+    //path planning
+    planner::RRT_Star global_planner_; 
+    std::vector<Eigen::Vector2f> path_;
+
+    void PublishGlobalPlanner();
   };
 
 } // namespace navigation

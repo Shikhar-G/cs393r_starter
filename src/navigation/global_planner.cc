@@ -11,14 +11,16 @@
 #include <vector>
 
 namespace planner {
+    RRT_Star::RRT_Star(){}
 
-    RRT_Star::RRT_Star() {
+    RRT_Star::RRT_Star(vector_map::VectorMap* map) {
+        vector_map_ = map;
         // Find min/max x and y
         float min_x = std::numeric_limits<float>::infinity();
         float max_x = -std::numeric_limits<float>::infinity();
         float min_y = std::numeric_limits<float>::infinity();
         float max_y = -std::numeric_limits<float>::infinity();
-        for (const auto& line : vector_map_.lines)
+        for (const auto& line : vector_map_->lines)
         {
             min_x = std::min(min_x, std::min(line.p0.x(), line.p1.x()));
             max_x = std::max(max_x, std::max(line.p0.x(), line.p1.x()));
@@ -33,6 +35,7 @@ namespace planner {
         max_x_ = max_x;
         min_y_ = min_y;
         max_y_ = max_y;
+        ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
     }
 
     void RRT_Star::Plan() {
@@ -146,7 +149,7 @@ namespace planner {
 
     bool RRT_Star::IsCollision(const Eigen::Vector2f& start, const Eigen::Vector2f& end)
     {
-        return vector_map_.Intersects(start, end);
+        if 
     }
 
     vector<size_t> RRT_Star::FindVerticesInRadius(const Eigen::Vector2f& point, double radius)
@@ -196,6 +199,20 @@ namespace planner {
                 edges_[nearest_vertex_new_index].push_back(vertex_near);
             }
         }
+    }
+
+    vector<pair<Eigen::Vector2f, Eigen::Vector2f>> RRT_Star::GetTree()
+    {
+        vector<pair<Eigen::Vector2f, Eigen::Vector2f>> tree;
+        for (size_t i = 0; i < vertices_.size(); i++)
+        {
+            size_t parent = parents_[i];
+            if (parent != i)
+            {
+                tree.push_back({vertices_[i], vertices_[parent]});
+            }
+        }
+        return tree;
     }
     
 }

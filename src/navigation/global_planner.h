@@ -52,14 +52,14 @@ class RRT_Star : public Planner{
         vector<size_t> parents_;
         vector<float> costs_;
         size_t goal_index_ = -1;
-        vector_map::VectorMap vector_map_;
-        size_t num_iterations_ = 1000;
+        vector_map::VectorMap *vector_map_;
+        size_t num_iterations_ = 10000;
         float min_x_;
         float max_x_;
         float min_y_;
         float max_y_;
-        float radius_ = 1;
-        float step_size_ = 0.1;
+        float radius_ = 5;
+        float step_size_ = 0.5;
 
         Eigen::Vector2f SampleRandomPoint();
         size_t FindNearestVertex(const Eigen::Vector2f& point);
@@ -74,8 +74,10 @@ class RRT_Star : public Planner{
     public:
         //initialization
         RRT_Star();
-        
+        RRT_Star(vector_map::VectorMap* map);
         RRT_Star(Eigen::Vector2f start, Eigen::Vector2f goal): start_(start), goal_(goal){}
+
+
         
         void Clear() {vertices_.clear(); edges_.clear(); parents_.clear(); costs_.clear();}
 
@@ -83,6 +85,8 @@ class RRT_Star : public Planner{
         void SetGoal(Eigen::Vector2f goal) {goal_ = goal;}
 
         void Plan();
+
+        vector<pair<Eigen::Vector2f, Eigen::Vector2f>> GetTree();
 
         vector<Eigen::Vector2f> GetPath();
 

@@ -40,6 +40,12 @@ using Eigen::Vector2f;
 using std::string;
 using std::vector;
 
+using visualization::ClearVisualizationMsg;
+using visualization::DrawArc;
+using visualization::DrawPoint;
+using visualization::DrawLine;
+using visualization::DrawParticle;
+
 using namespace math_util;
 using namespace ros_helpers;
 
@@ -74,6 +80,9 @@ namespace navigation
                                                                        nav_goal_angle_(0)
   {
     map_.Load(GetMapFileFromName(map_name));
+    //init global planner using map
+    global_planner_ = planner::RRT_Star(&map_);
+
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
         "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -92,7 +101,33 @@ namespace navigation
     nav_goal_angle_ = angle;
     nav_complete_ = false;
     // Get planned path (another callback).
+    global_planner_.SetGoal(nav_goal_loc_);
+    global_planner_.SetStart(robot_loc_);
+    global_planner_.Plan();
+    path_.clear();
+    path_ = global_planner_.GetPath();
+
   }
+
+  void Navigation::PublishGlobalPlanner() {
+  const uint32_t kColor = 0x702963;
+
+  vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
+  for (size_t i = 0; i < tree.size(); ++i) {
+    DrawLine(tree[i].first,
+             tree[i].second,
+             kColor,
+             global_viz_msg_);
+  }
+
+  // for (size_t i = 0; i + 1 < path_.size(); ++i) {
+  //   printf("[%ld] path x: %f path y: %f\n",i,path_[i].x(),path_[i].y());
+  //   DrawLine(path_[i],
+  //            path_[i + 1],
+  //            kColor,
+  //            global_viz_msg_);
+  
+}
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
   {
@@ -167,13 +202,15 @@ namespace navigation
     drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
     drive_msg_.curvature = curvature;
     // Add timestamps to all messages.
+    ClearVisualizationMsg(global_viz_msg_);
+    PublishGlobalPlanner();
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();
     drive_msg_.header.stamp = ros::Time::now();
     // Publish messages.
     viz_pub_.publish(local_viz_msg_);
     viz_pub_.publish(global_viz_msg_);
-    drive_pub_.publish(drive_msg_);
+    // drive_pub_.publish(drive_msg_);
   }
 
   // private helper functions go here
