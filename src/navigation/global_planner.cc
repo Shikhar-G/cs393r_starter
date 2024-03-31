@@ -14,21 +14,21 @@ namespace planner {
 
     RRT_Star::RRT_Star() {
         // Find min/max x and y
-        double min_x = std::numeric_limits<double>::infinity();
-        double max_x = -std::numeric_limits<double>::infinity();
-        double min_y = std::numeric_limits<double>::infinity();
-        double max_y = -std::numeric_limits<double>::infinity();
-        for (const auto& line : map_)
+        float min_x = std::numeric_limits<float>::infinity();
+        float max_x = -std::numeric_limits<float>::infinity();
+        float min_y = std::numeric_limits<float>::infinity();
+        float max_y = -std::numeric_limits<float>::infinity();
+        for (const auto& line : vector_map_.lines)
         {
-            min_x = std::min(min_x, std::min(line.first.x(), line.second.x()));
-            max_x = std::max(max_x, std::max(line.first.x(), line.second.x()));
-            min_y = std::min(min_y, std::min(line.first.y(), line.second.y()));
-            max_y = std::max(max_y, std::max(line.first.y(), line.second.y()));
+            min_x = std::min(min_x, std::min(line.p0.x(), line.p1.x()));
+            max_x = std::max(max_x, std::max(line.p0.x(), line.p1.x()));
+            min_y = std::min(min_y, std::min(line.p0.y(), line.p1.y()));
+            max_y = std::max(max_y, std::max(line.p0.y(), line.p1.y()));
         }
-        assert (min_x != std::numeric_limits<double>::infinity());
-        assert (max_x != -std::numeric_limits<double>::infinity());
-        assert (min_y != std::numeric_limits<double>::infinity());
-        assert (max_y != -std::numeric_limits<double>::infinity());
+        assert (min_x != std::numeric_limits<float>::infinity());
+        assert (max_x != -std::numeric_limits<float>::infinity());
+        assert (min_y != std::numeric_limits<float>::infinity());
+        assert (max_y != -std::numeric_limits<float>::infinity());
         min_x_ = min_x;
         max_x_ = max_x;
         min_y_ = min_y;
@@ -37,10 +37,7 @@ namespace planner {
 
     void RRT_Star::Plan() {
         // Reset the tree
-        vertices_.clear();
-        edges_.clear();
-        parents_.clear();
-        costs_.clear();
+        Clear();
         goal_index_ = -1;
         bool goal_reached = false;
         // Add the start node
@@ -99,8 +96,8 @@ namespace planner {
         while (curr_vertex != 0)
         {
             size_t parent_vertex = parents_[curr_vertex];
-            Eigen::Vector2f curr = vertices_[curr_vertex];
-            Eigen::Vector2f parent = vertices_[parent_vertex];
+            // Eigen::Vector2f curr = vertices_[curr_vertex];
+            // Eigen::Vector2f parent = vertices_[parent_vertex];
             curr_vertex = parent_vertex;
             path_out.push_back(vertices_[curr_vertex]);
         }
