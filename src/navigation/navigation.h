@@ -151,11 +151,27 @@ namespace navigation
     // transform point cloud according to time delay
     std::vector<Eigen::Vector2f> TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange);
 
-    float ScorePaths(float closest_approach, float free_path_length, float w1);
+    float ScorePaths(float closest_approach, float free_path_length, float distance_to_goal);
+
+    Eigen::Vector2f DistanceToGoal(float curvature);
+  
+    // weights for scoring paths
+    float w1_ = 1.0;
+    float w2_ = 0.25;
+    float w3_ = 0.5;
+
+
+    Eigen::Vector2f GetNextLocalGoal();
 
     //path planning
     planner::RRT_Star global_planner_; 
     std::vector<Eigen::Vector2f> path_;
+    // Local goal location.
+    Eigen::Vector2f local_goal_loc_;
+    // Current path index.
+    size_t path_index_;
+    // Carrot radius for the simple carrot follower.
+    float carrot_radius_ = 0.5;
 
     void PublishGlobalPlanner();
   };

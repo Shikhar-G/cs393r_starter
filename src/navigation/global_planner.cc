@@ -39,15 +39,16 @@ namespace planner {
         ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
     }
 
-    void RRT_Star::Plan() {
+    bool RRT_Star::Plan() {
         // Reset the tree
-        Clear();
+        this->Clear();
         goal_index_ = -1;
         bool goal_reached = false;
         // Add the start node
         vertices_.push_back(start_);
         parents_.push_back(0);
         costs_.push_back(0);
+        // iterate through the number of iterations, but don't stop if the goal hasn't been reached
         for (size_t i = 0; i < num_iterations_; i++)
         {
             // Sample a random point
@@ -87,10 +88,12 @@ namespace planner {
                     if (!goal_reached || costs_.back() < costs_[goal_index_]) {
                         goal_index_ = vertices_.size() - 1;
                         goal_reached = true;
+                        return true;
                     }
                 }
             }
         }
+        return false;
     }
 
     bool RRT_Star::IsValidVertex(const Eigen::Vector2f& vertex)
@@ -100,10 +103,12 @@ namespace planner {
 
     vector<Eigen::Vector2f> RRT_Star::GetPath()
     {
-        
+        vector<Eigen::Vector2f> path_out;
+        // the goal can not be larger then the size of vertices_
+        assert(!(vertices_.size() < goal_index_));
+
         size_t curr_vertex = goal_index_;
         //push goal to path.
-        vector<Eigen::Vector2f> path_out;
         path_out.push_back(vertices_[curr_vertex]);
 
         //starting from the goal work backwards to the start
@@ -128,8 +133,10 @@ namespace planner {
     Eigen::Vector2f RRT_Star::SampleRandomPoint()
     {
         // Sample a random point
-        double x = min_x_ + static_cast<double>(rand()) / RAND_MAX * (max_x_ - min_x_);
-        double y = min_y_ + static_cast<double>(rand()) / RAND_MAX * (max_y_ - min_y_);
+        float x = rng_.UniformRandom(min_x_, max_x_);
+        float y = rng_.UniformRandom(min_y_, max_y_);
+        // double x = min_x_ + static_cast<double>(rand()) / RAND_MAX * (max_x_ - min_x_);
+        // double y = min_y_ + static_cast<double>(rand()) / RAND_MAX * (max_y_ - min_y_);
         return Eigen::Vector2f(x, y);
     }
 
@@ -205,17 +212,20 @@ namespace planner {
 
     void RRT_Star::Rewire(size_t nearest_vertex_new_index, const Eigen::Vector2f& new_vertex,const vector<size_t>& vertices_in_radius)
     {
+        size_t new_vertex_index = costs_.size() - 1;
+        float new_vertex_cost = costs_[new_vertex_index];
         for(size_t vertex_near : vertices_in_radius)
         {
-            if(!IsCollision(vertices_[vertex_near],new_vertex) && !IsCollision(vertices_[nearest_vertex_new_index], vertices_[vertex_near]))
+            if(!IsCollision(vertices_[vertex_near],new_vertex) && !IsCollision(vertices_[new_vertex_index], vertices_[vertex_near]))
             {
-                float cost = costs_[nearest_vertex_new_index] + Cost(new_vertex, vertices_[vertex_near]);
+                float cost = new_vertex_cost + Cost(new_vertex, vertices_[vertex_near]);
                 // Make sure new edges would not collide with any wall
                 if(cost < costs_[vertex_near])
                 {
                     costs_[vertex_near] = cost;
-                    parents_[vertex_near] = nearest_vertex_new_index;
-                    edges_[nearest_vertex_new_index].push_back(vertex_near);
+                    edges_[new_vertex_index].push_back(vertex_near);
+                    edges_[vertex_near].erase(std::remove(edges_[vertex_near].begin(), edges_[vertex_near].end(),  parents_[vertex_near]), edges_[vertex_near].end());
+                    parents_[vertex_near] = new_vertex_index;
                 }
             }
 

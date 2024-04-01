@@ -100,17 +100,24 @@ namespace navigation
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
     nav_complete_ = false;
-    // Get planned path (another callback).
-    global_planner_.SetGoal(nav_goal_loc_);
-    global_planner_.SetStart(robot_loc_);
-    global_planner_.Plan();
-    path_.clear();
-    path_ = global_planner_.GetPath();
-
+    // // Get planned path (another callback).
+    // global_planner_.SetStart(robot_loc_);
+    // global_planner_.SetGoal(nav_goal_loc_);
+    // bool path_found = global_planner_.Plan();
+    // if (path_found)
+    // {
+    //   path_.clear();
+    //   path_ = global_planner_.GetPath();
+    // }
+    // else
+    // {
+    //   ROS_INFO("No path found. Please try again.");
+    // }
+    local_goal_loc_ = loc;
   }
 
   void Navigation::PublishGlobalPlanner() {
-  const uint32_t kColor = 0x702963;
+  // const uint32_t kColor = 0x702963;
 
   // vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
   // for (size_t i = 0; i < tree.size(); ++i) {
@@ -119,15 +126,14 @@ namespace navigation
   //            kColor,
   //            global_viz_msg_);
   // }
-
-  for (size_t i = 0; i + 1 < path_.size(); ++i) {
-    printf("[%ld] path x: %f path y: %f\n",i,path_[i].x(),path_[i].y());
-    DrawLine(path_[i],
-             path_[i + 1],
-             kColor,
-             global_viz_msg_);
+    // for (size_t i = 0; i < path_.size() - 1; ++i)
+    // {
+    //   DrawLine(path_[i],
+    //            path_[i + 1],
+    //            kColor,
+    //            global_viz_msg_);
+    // }
   }
-}
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
   {
@@ -174,35 +180,43 @@ namespace navigation
     if (!odom_initialized_)
       return;
 
+    // // Local planner
+    // if ()
+
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
     std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
     float curvature_interval = 0.1;
     float best_curvature = 0;
-    float distance_to_goal = 0;
+    float distance_to_travel = 0;
     float approach = 0;
     float score = 0;
     for(int i = 0; i < 20; i++){
       float dis = FreePathLength(-1 + i*curvature_interval, transformed_cloud);
       approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
-      float curr_score = ScorePaths(approach,dis,0.25);
+      Eigen::Vector2f next_xy = DistanceToGoal(-1 + i*curvature_interval);
+      // visualize the point
+      ROS_INFO("X: %f Y: %f",robot_loc_.x(),robot_loc_.y());
+      // Eigen::Vector2f next_xy = Eigen::Vector2f(robot_loc_.x() + 1,robot_loc_.y());
+      DrawPoint(next_xy, 0x0000FF, global_viz_msg_);
+      float curr_score = ScorePaths(approach,dis, 0);
       if(score < curr_score){
         score = curr_score;
-        distance_to_goal = dis;
+        distance_to_travel = dis;
         best_curvature = -1 + i*curvature_interval;
       }
     }
     float curvature = best_curvature;
-    // float distance_to_goal = FreePathLength(curvature, point_cloud_);
+    // float distance_to_travel = FreePathLength(curvature, point_cloud_);
     // float approach = ClosestPointApproach(curvature,point_cloud_);
-    // float score = ScorePaths(approach,distance_to_goal,0.25);
+    // float score = ScorePaths(approach,distance_to_travel,0.25);
     // ROS_INFO("%f\t%f",approach,score);
     // The latest observed point cloud is accessible via "point_cloud_"
-    drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
+    drive_msg_.velocity = TimeOptimalControl(distance_to_travel);
     drive_msg_.curvature = curvature;
     // Add timestamps to all messages.
-    ClearVisualizationMsg(global_viz_msg_);
+    // ClearVisualizationMsg(global_viz_msg_);
     PublishGlobalPlanner();
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();
@@ -210,7 +224,7 @@ namespace navigation
     // Publish messages.
     viz_pub_.publish(local_viz_msg_);
     viz_pub_.publish(global_viz_msg_);
-    // drive_pub_.publish(drive_msg_);
+    drive_pub_.publish(drive_msg_);
   }
 
   // private helper functions go here
@@ -359,9 +373,36 @@ namespace navigation
     }
     return closest_point;
   }
-
-  float Navigation::ScorePaths(float closest_approach, float free_path_length, float w1) {
-    return free_path_length + closest_approach*w1;
+  
+  Eigen::Vector2f Navigation::DistanceToGoal(float curvature) {
+    float radius;
+    if (curvature == 0) {
+      radius = 0;
+    } else {
+      radius = 1 / curvature;
+    }
+    float curr_velocity = robot_vel_.norm();
+    float next_x;
+    float next_y;
+    // calculate steering angle based on curvature
+    if (radius == 0) {
+      next_x = robot_loc_.x() + robot_vel_.x() * TIME_STEP;
+      next_y = robot_loc_.y() + robot_vel_.y() * TIME_STEP;
+    }
+    else {
+      // new theta_swept
+      float theta_swept = curr_velocity * TIME_STEP / radius + robot_angle_;
+      float dx = radius * sin(theta_swept);
+      float dy = radius * (1 - cos(theta_swept));
+      // calculate next x and y based on steering angle and current velocity
+      next_x = robot_loc_.x() + dx;
+      next_y = robot_loc_.y() + dy;
+    }
+    return Eigen::Vector2f(next_x, next_y);
+  }
+  
+  float Navigation::ScorePaths(float closest_approach, float free_path_length, float distance_to_travel){
+    return free_path_length*w1_ + closest_approach*w2_;
   }
 
   Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
@@ -379,6 +420,6 @@ namespace navigation
     return transformed_cloud;
   }
 
+// namespace navigation
 }
 
-// namespace navigation

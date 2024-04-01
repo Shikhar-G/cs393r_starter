@@ -12,6 +12,7 @@
 #include "shared/math/line2d.h"
 #include "shared/util/random.h"
 #include "vector_map/vector_map.h"
+#include "shared/util/random.h"
 
 #include "simple_queue.h"
 
@@ -31,7 +32,7 @@ using std::unordered_map;
 class Planner {
     public:
         virtual ~Planner() = default;
-        virtual void Plan() = 0;
+        virtual bool Plan() = 0;
         virtual vector<Eigen::Vector2f> GetPath() = 0;
         virtual void Clear() = 0;
         virtual void SetStart(Eigen::Vector2f start) = 0;
@@ -53,14 +54,16 @@ class RRT_Star : public Planner{
         vector<float> costs_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
-        size_t num_iterations_ = 100000;
+        size_t num_iterations_ = 200000;
         float min_x_;
         float max_x_;
         float min_y_;
         float max_y_;
-        float radius_ = 5;
+        float radius_ = 1;
         float step_size_ = 0.5;
         float safety_margin_ = 0.2;
+        //random number generator
+        util_random::Random rng_;
 
         Eigen::Vector2f SampleRandomPoint();
         size_t FindNearestVertex(const Eigen::Vector2f& point);
@@ -80,12 +83,12 @@ class RRT_Star : public Planner{
 
 
         
-        void Clear() {vertices_.clear(); edges_.clear(); parents_.clear(); costs_.clear();}
+        void Clear() {vertices_.clear(); edges_.clear(); parents_.clear(); costs_.clear(); goal_index_ = -1;}
 
         void SetStart(Eigen::Vector2f start) {start_ = start;}
         void SetGoal(Eigen::Vector2f goal) {goal_ = goal;}
 
-        void Plan();
+        bool Plan();
 
         vector<pair<Eigen::Vector2f, Eigen::Vector2f>> GetTree();
 
