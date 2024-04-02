@@ -80,7 +80,7 @@ namespace navigation
     // obstacle safety margin
     const float MARGIN = 0.1;
     // system latency
-    const float LATENCY = 0.125;
+    const float LATENCY = 0;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -153,12 +153,12 @@ namespace navigation
 
     float ScorePaths(float closest_approach, float free_path_length, float distance_to_goal);
 
-    Eigen::Vector2f DistanceToGoal(float curvature);
+    float DistanceToGoalScore(float curvature);
   
     // weights for scoring paths
     float w1_ = 1.0;
     float w2_ = 0.25;
-    float w3_ = 0.5;
+    float w3_ = 2.0;
 
 
     Eigen::Vector2f GetNextLocalGoal();

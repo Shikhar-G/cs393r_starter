@@ -190,25 +190,49 @@ namespace navigation
     float curvature_interval = 0.1;
     float best_curvature = 0;
     float distance_to_travel = 0;
-    float approach = 0;
-    float score = 0;
+    float score = -100000;
+    std::vector<float> fpls;
+    std::vector<float> approaches;
+    std::vector<float> dtgs;
     for(int i = 0; i < 20; i++){
       float dis = FreePathLength(-1 + i*curvature_interval, transformed_cloud);
-      approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
-      Eigen::Vector2f next_xy = DistanceToGoal(-1 + i*curvature_interval);
+      float approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
+      float dtg_score = DistanceToGoalScore(-1 + i*curvature_interval);
+      fpls.push_back(dis);
+      approaches.push_back(approach);
+      dtgs.push_back(dtg_score);
       // visualize the point
-      ROS_INFO("X: %f Y: %f",robot_loc_.x(),robot_loc_.y());
+      // ROS_INFO("X: %f Y: %f",robot_loc_.x(),robot_loc_.y());
       // Eigen::Vector2f next_xy = Eigen::Vector2f(robot_loc_.x() + 1,robot_loc_.y());
-      DrawPoint(next_xy, 0x0000FF, global_viz_msg_);
-      float curr_score = ScorePaths(approach,dis, 0);
-      if(score < curr_score){
-        score = curr_score;
-        distance_to_travel = dis;
+      // DrawPoint(next_xy, 0x0000FF, global_viz_msg_);
+    }
+
+    // normalize all vectors
+    float max_fpl = *std::max_element(fpls.begin(), fpls.end());
+    float min_fpl = *std::min_element(fpls.begin(), fpls.end());
+    float max_approach = *std::max_element(approaches.begin(), approaches.end());
+    float min_approach = *std::min_element(approaches.begin(), approaches.end());
+    float max_dtg = *std::max_element(dtgs.begin(), dtgs.end());
+    float min_dtg = *std::min_element(dtgs.begin(), dtgs.end());
+    // ROS_INFO("Max FPL: %f Min FPL: %f",max_fpl,min_fpl);
+    // ROS_INFO("Max Approach: %f Min Approach: %f",max_approach,min_approach);
+    // ROS_INFO("Max DTG: %f Min DTG: %f",max_dtg,min_dtg);
+    for(int i = 0; i < 20; i++){
+      if (max_fpl - min_fpl == 0) fpls[i] = 0;
+      else fpls[i] = (fpls[i] - min_fpl)/(max_fpl - min_fpl);
+      if (max_approach - min_approach == 0) approaches[i] = 0;
+      else approaches[i] = (approaches[i] - min_approach)/(max_approach - min_approach);
+      if (max_dtg - min_dtg == 0) dtgs[i] = 0;
+      else dtgs[i] = (dtgs[i] - min_dtg)/(max_dtg - min_dtg);
+      float total_score = ScorePaths(approaches[i],fpls[i],dtgs[i]);
+      if(total_score > score){
+        score = total_score;
         best_curvature = -1 + i*curvature_interval;
+        distance_to_travel = fpls[i];
       }
     }
     float curvature = best_curvature;
-    // float distance_to_travel = FreePathLength(curvature, point_cloud_);
+    // float distance_to_goal = FreePathLength(curvature, point_cloud_);
     // float approach = ClosestPointApproach(curvature,point_cloud_);
     // float score = ScorePaths(approach,distance_to_travel,0.25);
     // ROS_INFO("%f\t%f",approach,score);
@@ -260,7 +284,7 @@ namespace navigation
   float Navigation::FreePathLength(float curvature, const std::vector<Eigen::Vector2f> &point_cloud)
   {
     float radius;
-    if (curvature == 0)
+    if ((int)(curvature  * 100) == 0)
     {
       radius = 0;
     }
@@ -277,7 +301,7 @@ namespace navigation
 
     float min_theta = M_PI / 2;
 
-    if (curvature == 0)
+    if ((int)(curvature  * 100) == 0)
     {
       float straight_fpl = 10;
       for (unsigned long point = 0; point < point_cloud.size(); point++)
@@ -374,9 +398,9 @@ namespace navigation
     return closest_point;
   }
   
-  Eigen::Vector2f Navigation::DistanceToGoal(float curvature) {
+  float Navigation::DistanceToGoalScore(float curvature) {
     float radius;
-    if (curvature == 0) {
+    if ((int) (curvature * 100) == 0) {
       radius = 0;
     } else {
       radius = 1 / curvature;
@@ -386,23 +410,28 @@ namespace navigation
     float next_y;
     // calculate steering angle based on curvature
     if (radius == 0) {
-      next_x = robot_loc_.x() + robot_vel_.x() * TIME_STEP;
-      next_y = robot_loc_.y() + robot_vel_.y() * TIME_STEP;
+      next_x = robot_loc_.x() + robot_vel_.x() * 2;
+      next_y = robot_loc_.y() + robot_vel_.y() * 2;
     }
     else {
       // new theta_swept
-      float theta_swept = curr_velocity * TIME_STEP / radius + robot_angle_;
+      float theta_swept = curr_velocity * 2 / radius;
       float dx = radius * sin(theta_swept);
       float dy = radius * (1 - cos(theta_swept));
+      // translate dx and dy to robot's location on map frame
+      float dx_map = dx * cos(robot_angle_) - dy * sin(robot_angle_);
+      float dy_map = dx * sin(robot_angle_) + dy * cos(robot_angle_);
       // calculate next x and y based on steering angle and current velocity
-      next_x = robot_loc_.x() + dx;
-      next_y = robot_loc_.y() + dy;
+      next_x = robot_loc_.x() + dx_map;
+      next_y = robot_loc_.y() + dy_map;
     }
-    return Eigen::Vector2f(next_x, next_y);
+    float score = 1/sqrt((pow(local_goal_loc_.x() - next_x, 2) + pow(local_goal_loc_.y() - next_y, 2)));
+    return score;
   }
   
-  float Navigation::ScorePaths(float closest_approach, float free_path_length, float distance_to_travel){
-    return free_path_length*w1_ + closest_approach*w2_;
+  float Navigation::ScorePaths(float closest_approach, float free_path_length, float distance_to_goal_score){
+    ROS_INFO("%f %f %f",free_path_length,closest_approach,distance_to_goal_score);
+    return free_path_length*w1_ + closest_approach*w2_ + distance_to_goal_score*w3_;
   }
 
   Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
