@@ -81,6 +81,8 @@ namespace navigation
     const float MARGIN = 0.1;
     // system latency
     const float LATENCY = 0;
+    // Carrot radius for the simple carrot follower.
+    const float CARROT_RADIUS = 2;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -154,14 +156,16 @@ namespace navigation
     float ScorePaths(float closest_approach, float free_path_length, float distance_to_goal);
 
     float DistanceToGoalScore(float curvature);
+
+     Eigen::Vector2f findCircleLineIntersection(const Eigen::Vector2f& p1, const Eigen::Vector2f& p2);
   
     // weights for scoring paths
     float w1_ = 1.0;
     float w2_ = 0.25;
-    float w3_ = 2.0;
+    float w3_ = 1.0;
 
 
-    Eigen::Vector2f GetNextLocalGoal();
+    void SetNextLocalGoal();
 
     //path planning
     planner::RRT_Star global_planner_; 
@@ -169,9 +173,9 @@ namespace navigation
     // Local goal location.
     Eigen::Vector2f local_goal_loc_;
     // Current path index.
-    size_t path_index_;
+    size_t path_index_ = 0;
     // Carrot radius for the simple carrot follower.
-    float carrot_radius_ = 0.5;
+
 
     void PublishGlobalPlanner();
   };

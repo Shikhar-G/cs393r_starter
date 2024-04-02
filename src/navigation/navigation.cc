@@ -82,7 +82,6 @@ namespace navigation
     map_.Load(GetMapFileFromName(map_name));
     //init global planner using map
     global_planner_ = planner::RRT_Star(&map_);
-
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
         "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -99,25 +98,116 @@ namespace navigation
     // Set the navigation goal.
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
-    nav_complete_ = false;
-    // // Get planned path (another callback).
-    // global_planner_.SetStart(robot_loc_);
-    // global_planner_.SetGoal(nav_goal_loc_);
-    // bool path_found = global_planner_.Plan();
-    // if (path_found)
-    // {
-    //   path_.clear();
-    //   path_ = global_planner_.GetPath();
-    // }
-    // else
-    // {
-    //   ROS_INFO("No path found. Please try again.");
-    // }
-    local_goal_loc_ = loc;
+    // Get planned path (another callback).
+    global_planner_.SetStart(robot_loc_);
+    global_planner_.SetGoal(nav_goal_loc_);
+    bool path_found = global_planner_.Plan();
+    if (path_found)
+    {
+      path_.clear();
+      path_ = global_planner_.GetPath();
+      path_index_ = 0;
+      nav_complete_ = false;
+      ROS_INFO("%ld", path_.size());
+      SetNextLocalGoal();
+    }
+    else
+    {
+      ROS_INFO("No path found. Please try again.");
+    }
   }
 
+  Eigen::Vector2f Navigation::findCircleLineIntersection(const Eigen::Vector2f& p1, const Eigen::Vector2f& p2) {
+
+    // Translate points based on circle center
+    Eigen::Vector2f p1Translated(p1.x() - robot_loc_.x(), p1.y() - robot_loc_.y());
+    Eigen::Vector2f p2Translated(p2.x() - robot_loc_.x(), p2.y() - robot_loc_.y());
+
+    // Line equation coefficients A*x + B*y + C = 0
+    float A = p2Translated.y() - p1Translated.y();
+    float B = p1Translated.x() - p2Translated.x();
+    float C = p2Translated.x() * p1Translated.y() - p1Translated.x() * p2Translated.y();
+
+    // Quadratic equation coefficients
+    float a = A * A + B * B;
+    float b = 2 * C * A;
+    float c = C * C - B * B * CARROT_RADIUS * CARROT_RADIUS;
+    ROS_INFO("A: %f B: %f C: %f\n", A, B, C);
+
+
+    // Discriminant
+    float D = b * b - 4 * a * c;
+    ROS_INFO("D: %f\n", D);
+
+    if (D < 0) {
+        // No intersection
+        return Eigen::Vector2f(-1000, -1000);
+    }
+
+    // Find points of intersection
+    for (float sign : {-1, 1}) {
+        float t = (-b + sign * std::sqrt(D)) / (2 * a);
+        float intersection_x = (p1Translated.x() + t * (p2Translated.x() - p1Translated.x())) + robot_loc_.x();
+        float intersection_y = (p1Translated.y() + t * (p2Translated.y() - p1Translated.y())) + robot_loc_.y();
+        Eigen::Vector2f intersection = Eigen::Vector2f(intersection_x, intersection_y);
+        // Check if the intersection point lies within the line segment
+        if (std::min(p1.x(), p2.x()) <= intersection.x() && intersection.x() <= std::max(p1.x(), p2.x()) &&
+            std::min(p1.y(), p2.y()) <= intersection.y() && intersection.y() <= std::max(p1.y(), p2.y())) {
+            return intersection;
+        }
+    }
+    return Eigen::Vector2f(-1000, -1000);
+}
+
+  void Navigation::SetNextLocalGoal() 
+  {
+    if (path_index_ == path_.size() - 1)
+    {
+      local_goal_loc_ = nav_goal_loc_;
+      return;
+    }
+    // check each line segment from current path index to the end of the path for the first point that intersects the carrot radius
+    for (size_t i = path_index_; i < path_.size() - 1; i++)
+    {
+      Eigen::Vector2f start = path_[i];
+      Eigen::Vector2f end = path_[i + 1];
+      // float dist_to_start = (start - robot_loc_).norm();
+      // float dist_to_end = (end - robot_loc_).norm();
+      Eigen::Vector2f intersection = findCircleLineIntersection(start, end);
+      if (intersection.x() != -1000 && intersection.y() != -1000)
+      {
+        ROS_INFO("Intersection: %f %f", intersection.x(), intersection.y());
+        local_goal_loc_ = intersection;
+        path_index_ = i + 1;
+        return;
+      }
+      // if (dist_to_start < CARROT_RADIUS && dist_to_end >= CARROT_RADIUS)
+      // {
+      //   ROS_INFO("start: %f %f", start.x(), start.y());
+      //   ROS_INFO("end: %f %f", end.x(), end.y());
+      //   ROS_INFO("Carrot Radius: %f", CARROT_RADIUS);
+      //   // find the intersection between the circle of radius carrot radius centered at the robot and the line segment
+
+      //   if (intersection.x() == -1000 && intersection.y() == -1000)
+      //   {
+      //     path_.clear();
+      //     nav_complete_ = true;
+      //     ROS_INFO("Navigation failed. Please replan.");
+      //     return;
+      //   }
+      //   local_goal_loc_ = intersection;
+      //   path_index_ = i + 1;
+        // break;
+    // }
+    }
+    ROS_INFO("Could not find intersection");
+    path_.clear();
+    nav_complete_ = true;
+  }
+
+
   void Navigation::PublishGlobalPlanner() {
-  // const uint32_t kColor = 0x702963;
+  const uint32_t kColor = 0x702963;
 
   // vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
   // for (size_t i = 0; i < tree.size(); ++i) {
@@ -126,13 +216,13 @@ namespace navigation
   //            kColor,
   //            global_viz_msg_);
   // }
-    // for (size_t i = 0; i < path_.size() - 1; ++i)
-    // {
-    //   DrawLine(path_[i],
-    //            path_[i + 1],
-    //            kColor,
-    //            global_viz_msg_);
-    // }
+    for (size_t i = 0; i < path_.size() - 1; ++i)
+    {
+      DrawLine(path_[i],
+               path_[i + 1],
+               kColor,
+               global_viz_msg_);
+    }
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
@@ -180,8 +270,26 @@ namespace navigation
     if (!odom_initialized_)
       return;
 
-    // // Local planner
-    // if ()
+    // Don't move if no path
+  if (path_.empty() || nav_complete_)
+      return;
+
+  
+    DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
+    ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
+    // Do we need to replan?
+    if ((robot_loc_ - local_goal_loc_).norm() < 0.5) {
+      // goal reached
+      if (local_goal_loc_ == nav_goal_loc_) {
+        drive_msg_.velocity = 0;
+        drive_msg_.curvature = 0;
+        path_.clear();
+        nav_complete_ = true;
+        path_index_ = 0;
+        return;
+      }
+      SetNextLocalGoal();
+    }
 
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
@@ -218,6 +326,8 @@ namespace navigation
     // ROS_INFO("Max Approach: %f Min Approach: %f",max_approach,min_approach);
     // ROS_INFO("Max DTG: %f Min DTG: %f",max_dtg,min_dtg);
     for(int i = 0; i < 20; i++){
+      // ensure that the path is valid
+      if (fpls[i] < MARGIN || approaches[i] < MARGIN) continue;
       if (max_fpl - min_fpl == 0) fpls[i] = 0;
       else fpls[i] = (fpls[i] - min_fpl)/(max_fpl - min_fpl);
       if (max_approach - min_approach == 0) approaches[i] = 0;
@@ -231,16 +341,23 @@ namespace navigation
         distance_to_travel = fpls[i];
       }
     }
-    float curvature = best_curvature;
-    // float distance_to_goal = FreePathLength(curvature, point_cloud_);
-    // float approach = ClosestPointApproach(curvature,point_cloud_);
-    // float score = ScorePaths(approach,distance_to_travel,0.25);
-    // ROS_INFO("%f\t%f",approach,score);
-    // The latest observed point cloud is accessible via "point_cloud_"
-    drive_msg_.velocity = TimeOptimalControl(distance_to_travel);
-    drive_msg_.curvature = curvature;
-    // Add timestamps to all messages.
-    // ClearVisualizationMsg(global_viz_msg_);
+    // no valid paths
+    if (score == -100000){
+      drive_msg_.velocity = 0;
+      drive_msg_.curvature = 0;
+    }
+    else {
+      float curvature = best_curvature;
+      // float distance_to_goal = FreePathLength(curvature, point_cloud_);
+      // float approach = ClosestPointApproach(curvature,point_cloud_);
+      // float score = ScorePaths(approach,distance_to_travel,0.25);
+      // ROS_INFO("%f\t%f",approach,score);
+      // The latest observed point cloud is accessible via "point_cloud_"
+      drive_msg_.velocity = TimeOptimalControl(distance_to_travel);
+      drive_msg_.curvature = curvature;
+    }
+      // Add timestamps to all messages.
+      // ClearVisualizationMsg(global_viz_msg_);
     PublishGlobalPlanner();
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();
@@ -425,12 +542,12 @@ namespace navigation
       next_x = robot_loc_.x() + dx_map;
       next_y = robot_loc_.y() + dy_map;
     }
-    float score = 1/sqrt((pow(local_goal_loc_.x() - next_x, 2) + pow(local_goal_loc_.y() - next_y, 2)));
+    float score = 1/(pow(local_goal_loc_.x() - next_x, 2) + pow(local_goal_loc_.y() - next_y, 2));
     return score;
   }
   
   float Navigation::ScorePaths(float closest_approach, float free_path_length, float distance_to_goal_score){
-    ROS_INFO("%f %f %f",free_path_length,closest_approach,distance_to_goal_score);
+    // ROS_INFO("%f %f %f",free_path_length,closest_approach,distance_to_goal_score);
     return free_path_length*w1_ + closest_approach*w2_ + distance_to_goal_score*w3_;
   }
 
