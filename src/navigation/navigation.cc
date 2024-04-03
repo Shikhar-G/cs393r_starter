@@ -285,7 +285,7 @@ namespace navigation
     // Do we need to replan?
     if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
       // goal reached
-      if (local_goal_loc_ == nav_goal_loc_) {
+      if (local_goal_loc_ == nav_goal_loc_ && (robot_loc_ - local_goal_loc_).norm() < 0.5) {
         drive_msg_.velocity = 0;
         drive_msg_.curvature = 0;
         path_.clear();
@@ -293,6 +293,10 @@ namespace navigation
         path_index_ = 0;
         return;
       }
+      SetNextLocalGoal();
+    }
+    else if ((robot_loc_ - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
+      // try to replan
       SetNextLocalGoal();
     }
 
