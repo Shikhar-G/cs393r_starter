@@ -13,6 +13,7 @@
 #include "shared/util/random.h"
 #include "vector_map/vector_map.h"
 #include "shared/util/random.h"
+#include "global_planner.h"
 
 #include "simple_queue.h"
 
@@ -20,8 +21,8 @@
 #include "ros/ros.h"
 #include "ros/package.h"
 
-#ifndef GLOBAL_PLANNER_H_
-#define GLOBAL_PLANNER_H_
+#ifndef INFORMED_RRT_H_
+#define INFORMED_RRT_H_
 
 namespace planner {
 
@@ -29,19 +30,11 @@ using std::vector;
 using std::unordered_map;
 
 // General parent class planner that will be inherited by all other planners
-class Planner {
-    public:
-        virtual ~Planner() = default;
-        virtual bool Plan() = 0;
-        virtual vector<Eigen::Vector2f> GetPath() = 0;
-        virtual void Clear() = 0;
-        virtual void SetStart(Eigen::Vector2f start) = 0;
-        virtual void SetGoal(Eigen::Vector2f goal) = 0;
-};
 
 
 
-class RRT_Star : public Planner{
+
+class Informed_RRT_Star : public Planner{
 
     private:
         Eigen::Vector2f start_;
@@ -52,20 +45,22 @@ class RRT_Star : public Planner{
         unordered_map<size_t, vector<size_t>> edges_;
         vector<size_t> parents_;
         vector<float> costs_;
+        vector<float> costs_distance_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
-        size_t num_iterations_ = 200000;
+        size_t num_iterations_ = 10000;
         float min_x_;
         float max_x_;
         float min_y_;
         float max_y_;
         float radius_ = 1;
-        float step_size_ = 0.5;
+        float step_size_ = 1;
         float safety_margin_ = 0.2;
         //random number generator
         util_random::Random rng_;
 
         Eigen::Vector2f SampleRandomPoint();
+        Eigen::Vector2f InformedSampleRandomPoint(float c_min, size_t goal_point_index, Eigen::Matrix3f rotation_to_world);
         size_t FindNearestVertex(const Eigen::Vector2f& point);
         Eigen::Vector2f Steer(size_t nearest_vertex_index, const Eigen::Vector2f& random_point);
         bool IsValidVertex(const Eigen::Vector2f& vertex);
@@ -75,12 +70,16 @@ class RRT_Star : public Planner{
         size_t FindNearestVertexInRadius(const Eigen::Vector2f& point, size_t nearest_vertex_index, const vector<size_t>& vertices_in_radius);
         vector<size_t> FindVerticesInRadius(const Eigen::Vector2f& point, double radius);
         float ClosestDistanceToWall(const Eigen::Vector2f& start, const Eigen::Vector2f& end);
+        //informed rrt sampling
+        Eigen::Vector3f SampleUnitBall();
+        Eigen::Matrix3f RotationToWorldFrame(const Eigen::Vector2f& start, const Eigen::Vector2f& goal, float L);
+
         
     public:
         //initialization
-        RRT_Star();
-        RRT_Star(vector_map::VectorMap* map);
-        RRT_Star(Eigen::Vector2f start, Eigen::Vector2f goal): start_(start), goal_(goal){}
+        Informed_RRT_Star();
+        Informed_RRT_Star(vector_map::VectorMap* map);
+        Informed_RRT_Star(Eigen::Vector2f start, Eigen::Vector2f goal): start_(start), goal_(goal){}
 
 
         

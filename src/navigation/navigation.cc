@@ -81,7 +81,7 @@ namespace navigation
   {
     map_.Load(GetMapFileFromName(map_name));
     //init global planner using map
-    global_planner_ = planner::RRT_Star(&map_);
+    global_planner_ = planner::Informed_RRT_Star(&map_);
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
         "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -99,7 +99,8 @@ namespace navigation
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
     // Get planned path (another callback).
-    global_planner_.SetStart(robot_loc_);
+    Eigen::Vector2f start_loc(robot_loc_.x() + cos(robot_angle_), robot_loc_.y() + sin(robot_angle_));
+    global_planner_.SetStart(start_loc);
     global_planner_.SetGoal(nav_goal_loc_);
     bool path_found = global_planner_.Plan();
     if (path_found)
@@ -169,39 +170,43 @@ namespace navigation
     // check each line segment from current path index to the end of the path for the first point that intersects the carrot radius
     for (size_t i = path_index_; i < path_.size() - 1; i++)
     {
-      Eigen::Vector2f start = path_[i];
+      // Eigen::Vector2f start = path_[i];
       Eigen::Vector2f end = path_[i + 1];
       // float dist_to_start = (start - robot_loc_).norm();
-      // float dist_to_end = (end - robot_loc_).norm();
-      Eigen::Vector2f intersection = findCircleLineIntersection(start, end);
-      if (intersection.x() != -1000 && intersection.y() != -1000)
+      float dist_to_end = (end - robot_loc_).norm();
+      if (i + 1 == path_.size() - 1)
       {
-        ROS_INFO("Intersection: %f %f", intersection.x(), intersection.y());
-        local_goal_loc_ = intersection;
+        ROS_INFO("End is goal");
+        ROS_INFO("Dist to nav goal: %f", (nav_goal_loc_ - robot_loc_).norm());
+        ROS_INFO("Dist to end: %f", dist_to_end);
+        local_goal_loc_ = end;
         path_index_ = i + 1;
         return;
       }
       // if (dist_to_start < CARROT_RADIUS && dist_to_end >= CARROT_RADIUS)
-      // {
-      //   ROS_INFO("start: %f %f", start.x(), start.y());
-      //   ROS_INFO("end: %f %f", end.x(), end.y());
-      //   ROS_INFO("Carrot Radius: %f", CARROT_RADIUS);
-      //   // find the intersection between the circle of radius carrot radius centered at the robot and the line segment
-
-      //   if (intersection.x() == -1000 && intersection.y() == -1000)
-      //   {
-      //     path_.clear();
-      //     nav_complete_ = true;
-      //     ROS_INFO("Navigation failed. Please replan.");
-      //     return;
-      //   }
-      //   local_goal_loc_ = intersection;
-      //   path_index_ = i + 1;
+      if (dist_to_end <= CARROT_RADIUS)
+      {
+        local_goal_loc_ = end;
+        path_index_ = i + 1;
+        return;
+        // ROS_INFO("start: %f %f", start.x(), start.y());
+        // ROS_INFO("end: %f %f", end.x(), end.y());
+        // ROS_INFO("Carrot Radius: %f", CARROT_RADIUS);
+        // // find the intersection between the circle of radius carrot radius centered at the robot and the line segment
+        // Eigen::Vector2f intersection = findCircleLineIntersection(start, end);
+        // if (intersection.x() == -1000 && intersection.y() == -1000)
+        // {
+        //   path_.clear();
+        //   nav_complete_ = true;
+        //   ROS_INFO("Navigation failed. Please replan.");
+        //   return;
+        // }
+        // local_goal_loc_ = intersection;
+        // path_index_ = i + 1;
         // break;
-    // }
+      }
     }
     ROS_INFO("Could not find intersection");
-    path_.clear();
     nav_complete_ = true;
   }
 
@@ -278,7 +283,7 @@ namespace navigation
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
     // Do we need to replan?
-    if ((robot_loc_ - local_goal_loc_).norm() < 0.5) {
+    if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
       // goal reached
       if (local_goal_loc_ == nav_goal_loc_) {
         drive_msg_.velocity = 0;

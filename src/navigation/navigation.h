@@ -29,6 +29,8 @@
 
 #include "global_planner.h"
 
+#include "Informed_RRT.h"
+
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
@@ -82,7 +84,7 @@ namespace navigation
     // system latency
     const float LATENCY = 0;
     // Carrot radius for the simple carrot follower.
-    const float CARROT_RADIUS = 2;
+    const float CARROT_RADIUS = 2.5;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -162,13 +164,13 @@ namespace navigation
     // weights for scoring paths
     float w1_ = 1.0;
     float w2_ = 0.25;
-    float w3_ = 1.0;
+    float w3_ = 1.2;
 
 
     void SetNextLocalGoal();
 
     //path planning
-    planner::RRT_Star global_planner_; 
+    planner::Informed_RRT_Star global_planner_; 
     std::vector<Eigen::Vector2f> path_;
     // Local goal location.
     Eigen::Vector2f local_goal_loc_;
