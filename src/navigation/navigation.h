@@ -84,7 +84,7 @@ namespace navigation
     // system latency
     const float LATENCY = 0;
     // Carrot radius for the simple carrot follower.
-    const float CARROT_RADIUS = 2.5;
+    const float CARROT_RADIUS = 3;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 

@@ -49,11 +49,16 @@ namespace planner {
         parents_.push_back(0);
         costs_.push_back(0);
         costs_distance_.push_back(0);
+        size_t true_iter = 0;
+        float curr_radius = 0.5;
+        Eigen::Vector2f center = start_;
         // iterate through the number of iterations, but don't stop if the goal hasn't been reached
         for (size_t i = 0; i < num_iterations_;)
         {
+            true_iter++;
             Eigen::Vector2f random_point;
             // Sample a random point
+
             if (goal_reached)
             {
                 float c_min = (goal_ - start_).norm();
@@ -61,11 +66,18 @@ namespace planner {
                 random_point = InformedSampleRandomPoint(c_min, goal_index_, rotation_to_world);
                 i++;
             }
-            else
-            {
-                random_point = SampleRandomPoint();
+            else if (true_iter % 500 == 0) {
+                random_point = goal_;
+                if (center == start_) center = goal_;
+                else center = start_;
             }
-            
+            else {
+                if (true_iter % 50 == 0)
+                {
+                    curr_radius *= 2;
+                }
+                random_point = SampleRandomPoint(curr_radius, center);
+            }
             // Make sure the random point is not too close to any wall
             if (!IsValidVertex(random_point))
             {
@@ -86,6 +98,7 @@ namespace planner {
                 vertices_.push_back(new_vertex);
                 parents_.push_back(nearest_vertex_new);
                 float closest_distance_nearest = ClosestDistanceToWall(vertices_[nearest_vertex_new], new_vertex);
+                // float closest_distance_nearest = 0;
                 costs_.push_back(costs_[nearest_vertex_new] + Cost(vertices_[nearest_vertex_new], new_vertex, closest_distance_nearest));
                 costs_distance_.push_back(costs_distance_[nearest_vertex_new] + (vertices_[nearest_vertex_new] - new_vertex).norm());
                 // // check if nearest_vertex_new is in edges_
@@ -102,6 +115,9 @@ namespace planner {
                 {
                     // Set the goal index if goal is not reached yet or the new vertex has a lower cost
                     if (!goal_reached || costs_.back() < costs_[goal_index_]) {
+                        if (!goal_reached) {
+                            ROS_INFO("Goal reached at iteration %zu", true_iter );
+                        }
                         goal_index_ = vertices_.size() - 1;
                         goal_reached = true;
                     }
@@ -183,11 +199,19 @@ namespace planner {
 
     }
 
-    Eigen::Vector2f Informed_RRT_Star::SampleRandomPoint()
+    Eigen::Vector2f Informed_RRT_Star::SampleRandomPoint(float radius, const Eigen::Vector2f& center)
     {
-        // Sample a random point
-        float x = rng_.UniformRandom(min_x_, max_x_);
-        float y = rng_.UniformRandom(min_y_, max_y_);
+        // Sample a random point with given radius of the start point but not less than min_x_ and max_x_
+        float min_x = std::max(min_x_, center[0] - radius);
+        float max_x = std::min(max_x_, center[0] + radius);
+        float min_y = std::max(min_y_, center[1] - radius);
+        float max_y = std::min(max_y_, center[1] + radius);
+        float x = rng_.UniformRandom(min_x, max_x);
+        float y = rng_.UniformRandom(min_y, max_y);
+        // Sample a random point within the bounds
+
+        // float x = rng_.UniformRandom(min_x_, max_x_);
+        // float y = rng_.UniformRandom(min_y_, max_y_);
         // double x = min_x_ + static_cast<double>(rand()) / RAND_MAX * (max_x_ - min_x_);
         // double y = min_y_ + static_cast<double>(rand()) / RAND_MAX * (max_y_ - min_y_);
         return Eigen::Vector2f(x, y);
@@ -288,7 +312,7 @@ namespace planner {
         double min_cost = costs_[nearest_vertex_index];
         for (size_t i : vertices_in_radius)
         {
-            float closest_distance = ClosestDistanceToWall(vertices_[i], point);
+            float closest_distance = ClosestDistanceToWall(vertices_[i], point); 
             if (!IsCollision(closest_distance))
             {
                 double cost = costs_[i] + Cost(vertices_[i], point, closest_distance);

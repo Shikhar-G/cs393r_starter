@@ -46,7 +46,7 @@ using std::swap;
 using std::vector;
 using vector_map::VectorMap;
 
-DEFINE_double(num_particles, 25, "Number of particles");
+DEFINE_double(num_particles, 10, "Number of particles");
 
 namespace particle_filter
 {

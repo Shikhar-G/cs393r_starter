@@ -281,7 +281,7 @@ namespace navigation
 
   
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
-    ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
+    // ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
     // Do we need to replan?
     if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
       // goal reached
