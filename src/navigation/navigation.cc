@@ -174,15 +174,15 @@ namespace navigation
       Eigen::Vector2f end = path_[i + 1];
       // float dist_to_start = (start - robot_loc_).norm();
       float dist_to_end = (end - robot_loc_).norm();
-      if (i + 1 == path_.size() - 1)
-      {
-        ROS_INFO("End is goal");
-        ROS_INFO("Dist to nav goal: %f", (nav_goal_loc_ - robot_loc_).norm());
-        ROS_INFO("Dist to end: %f", dist_to_end);
-        local_goal_loc_ = end;
-        path_index_ = i + 1;
-        return;
-      }
+      // if (i + 1 == path_.size() - 1 && )
+      // {
+      //   ROS_INFO("End is goal");
+      //   ROS_INFO("Dist to nav goal: %f", (nav_goal_loc_ - robot_loc_).norm());
+      //   ROS_INFO("Dist to end: %f", dist_to_end);
+      //   local_goal_loc_ = end;
+      //   path_index_ = i + 1;
+      //   return;
+      // }
       // if (dist_to_start < CARROT_RADIUS && dist_to_end >= CARROT_RADIUS)
       if (dist_to_end <= CARROT_RADIUS)
       {
