@@ -41,12 +41,13 @@ class Informed_RRT_Star : public Planner{
         float start_angle_;
         Eigen::Vector2f goal_;
         //the goal radius is in meters, creates 
-        float goal_radius_ = 1;
+        float goal_radius_ = 0.5;
         vector<Eigen::Vector2f> vertices_;
         unordered_map<size_t, vector<size_t>> edges_;
         vector<size_t> parents_;
         vector<float> costs_;
         vector<float> costs_distance_;
+        vector<Eigen::Vector2f> path_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
         std::vector<Eigen::Vector2f> point_cloud_;
@@ -92,6 +93,7 @@ class Informed_RRT_Star : public Planner{
         void SetStart(Eigen::Vector2f start, float start_angle);
         void SetGoal(Eigen::Vector2f goal) {goal_ = goal;}
         void SetPointCloud(const std::vector<Eigen::Vector2f>& point_cloud) {point_cloud_ = point_cloud;}
+        bool isPathValid(size_t curr_index);
 
         bool Plan();
 

@@ -160,13 +160,13 @@ namespace navigation
                kColor,
                global_viz_msg_);
     }
-    // for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
-    // {
-    //   DrawLine(nonsmooth_path_[i],
-    //            nonsmooth_path_[i + 1],
-    //            0x0000FF,
-    //            global_viz_msg_);
-    // }
+    for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
+    {
+      DrawLine(nonsmooth_path_[i],
+               nonsmooth_path_[i + 1],
+               0x0000FF,
+               global_viz_msg_);
+    }
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
@@ -222,6 +222,15 @@ namespace navigation
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     // Do we need to replan?
     if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
+      global_planner_.SetPointCloud(point_cloud_);
+      bool path_valid = global_planner_.isPathValid(path_index_);
+      if (!path_valid) {
+        ROS_INFO("Path is now invalid");
+        drive_msg_.velocity = 0;
+        drive_msg_.curvature = 0;
+        RecoverFromFailure();
+        return;
+      }
       // goal reached
       if (local_goal_loc_ == nav_goal_loc_) {
         if ((next_robot_loc - local_goal_loc_).norm() < 0.5) {

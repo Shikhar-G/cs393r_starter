@@ -78,7 +78,7 @@ namespace planner {
             else {
                 if (true_iter % 50 == 0)
                 {
-                    curr_radius *= 2;
+                    curr_radius *= 1.5;
                 }
                 random_point = SampleRandomPoint(curr_radius, center);
             }
@@ -137,6 +137,19 @@ namespace planner {
         return !IsCollision(closest_distance);
     }
 
+    bool Informed_RRT_Star::isPathValid(size_t curr_index)
+    {
+        for (size_t i = curr_index; i < path_.size() - 1; i++)
+        {
+            float closest_distance = ClosestDistanceToWall(path_[i], path_[i+1]);
+            if (IsCollision(closest_distance))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     vector<Eigen::Vector2f> Informed_RRT_Star::GetPath(bool smooth)
     {
         vector<Eigen::Vector2f> path_out;
@@ -163,6 +176,7 @@ namespace planner {
         path_out.push_back(goal_);
         if (!smooth)
         {
+            path_ = path_out;
             return path_out;
         }
         smooth_path.resize(path_out.size());
@@ -193,6 +207,7 @@ namespace planner {
             }
             position_index++;
         }
+        path_ = smooth_path;
         return smooth_path;
     }
 
@@ -248,6 +263,7 @@ namespace planner {
                 float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
                 if(!IsCollision(closest_distance, safety_margin_*2) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[end] - costs_[start])
                 {
+                    ROS_INFO("Closest distance between %zu and %zu: %f", start, end, closest_distance);
                     smooth_path[i] = path_out[i];
                     float num_points_between = i - position_index;
                     if (num_points_between > 1)
@@ -272,6 +288,7 @@ namespace planner {
             }
             position_index++;
         }
+        path_ = smooth_path;
         return smooth_path;
     }
 
@@ -399,6 +416,7 @@ namespace planner {
     float Informed_RRT_Star::ClosestDistanceToWall(const Eigen::Vector2f& start, const Eigen::Vector2f& end)
     {
         float min_distance = std::numeric_limits<float>::infinity();
+        // length of the line segment square
         for (const auto& wall : vector_map_->lines)
         {
             if (wall.CloserThan(start, end, safety_margin_))
@@ -412,16 +430,43 @@ namespace planner {
         // iterate through point cloud and find the closest distance to a point
         for (const Eigen::Vector2f& point : point_cloud_)
         {
-            float sq_dist;
-            Eigen::Vector2f projected_point;
-            geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
-             if (sq_dist < Sq(safety_margin_))
+            float distance;
+            if (start == end)
+                distance = (point - start).norm();
+            else {
+                // compute distance from point to line manually
+                Eigen::Vector2f start_to_point = point - start;
+                Eigen::Vector2f start_to_end = end - start;
+                float t = start_to_point.dot(start_to_end) / start_to_end.squaredNorm();
+                if (t < 0)
+                {
+                    distance = start_to_point.norm();
+                }
+                else if (t > 1)
+                {
+                    distance = (point - end).norm();
+                }
+                else {
+                    distance = (point - (start + t * start_to_end)).norm();
+                }
+            }
+            if (distance < safety_margin_)
             {
                 return 0;
             }
             else {
-                min_distance = std::min(sqrt(sq_dist), min_distance);
+                min_distance = std::min(distance, min_distance);
             }
+            // float sq_dist;
+            // Eigen::Vector2f projected_point;
+            // geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
+            //  if (sq_dist < Sq(safety_margin_))
+            // {
+            //     return 0;
+            // }
+            // else {
+            //     min_distance = std::min(sqrt(sq_dist), min_distance);
+            // }
         }
         return min_distance;
     }
@@ -490,7 +535,7 @@ namespace planner {
 
     vector<pair<Eigen::Vector2f, Eigen::Vector2f>> Informed_RRT_Star::GetTree()
     {
-        vector<pair<Eigen::Vector2f, Eigen::Vector2f>> tree;
+        std::vector<pair<Eigen::Vector2f, Eigen::Vector2f>> tree;
         for (size_t i = 0; i < vertices_.size(); i++)
         {
             size_t parent = parents_[i];
