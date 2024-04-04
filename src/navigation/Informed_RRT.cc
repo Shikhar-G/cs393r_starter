@@ -44,6 +44,7 @@ namespace planner {
     bool Informed_RRT_Star::Plan() {
         // Reset the tree
         ROS_INFO("Planning...");
+        ROS_INFO("Size of point cloud: %ld", point_cloud_.size());
         this->Clear();
         goal_index_ = -1;
         bool goal_reached = false;
@@ -406,6 +407,20 @@ namespace planner {
             }
             else {
                 min_distance = std::min(min_distance, wall.ClosestApproach(start, end));
+            }
+        }
+        // iterate through point cloud and find the closest distance to a point
+        for (const Eigen::Vector2f& point : point_cloud_)
+        {
+            float sq_dist;
+            Eigen::Vector2f projected_point;
+            geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
+             if (sq_dist < Sq(safety_margin_))
+            {
+                return 0;
+            }
+            else {
+                min_distance = std::min(sqrt(sq_dist), min_distance);
             }
         }
         return min_distance;

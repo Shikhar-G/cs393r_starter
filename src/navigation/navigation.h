@@ -105,6 +105,7 @@ namespace navigation
     void Run();
     // Used to set the next target pose.
     void SetNavGoal(const Eigen::Vector2f &loc, float angle);
+    void RecoverFromFailure();
 
   private:
     // simple_

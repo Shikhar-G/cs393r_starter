@@ -102,6 +102,7 @@ namespace navigation
     Eigen::Vector2f start_loc(robot_loc_.x() + cos(robot_angle_), robot_loc_.y() + sin(robot_angle_));
     global_planner_.SetStart(start_loc);
     global_planner_.SetGoal(nav_goal_loc_);
+    global_planner_.SetPointCloud(point_cloud_);
     bool path_found = global_planner_.Plan();
     if (path_found)
     {
@@ -137,7 +138,11 @@ namespace navigation
     nav_complete_ = true;
   }
 
-
+  void Navigation::RecoverFromFailure() {
+    //if the robot is stuck first send all points to informed RRT then replan*
+    ROS_INFO("Replanning...");
+    SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+  }
   void Navigation::PublishGlobalPlanner() {
   const uint32_t kColor = 0x702963;
 
@@ -236,8 +241,7 @@ namespace navigation
     else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
-      ROS_INFO("Replanning...");
-      SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+      RecoverFromFailure();
     }
 
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
@@ -289,6 +293,7 @@ namespace navigation
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
       ROS_INFO("No valid paths");
+      RecoverFromFailure();
     }
     else {
       float curvature = best_curvature;

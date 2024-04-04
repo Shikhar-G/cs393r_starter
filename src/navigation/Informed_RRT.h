@@ -49,6 +49,7 @@ class Informed_RRT_Star : public Planner{
         vector<float> costs_distance_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
+        std::vector<Eigen::Vector2f> point_cloud_;
         size_t num_iterations_ = 5000;
         float min_x_;
         float max_x_;
@@ -90,6 +91,7 @@ class Informed_RRT_Star : public Planner{
         void SetStart(Eigen::Vector2f start) {start_ = start;}
         void SetStart(Eigen::Vector2f start, float start_angle);
         void SetGoal(Eigen::Vector2f goal) {goal_ = goal;}
+        void SetPointCloud(const std::vector<Eigen::Vector2f>& point_cloud) {point_cloud_ = point_cloud;}
 
         bool Plan();
 
