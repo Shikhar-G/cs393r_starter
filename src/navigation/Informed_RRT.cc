@@ -38,11 +38,12 @@ namespace planner {
         max_x_ = max_x;
         min_y_ = min_y;
         max_y_ = max_y;
-        // ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
+        ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
     }
     
     bool Informed_RRT_Star::Plan() {
         // Reset the tree
+        ROS_INFO("Planning...");
         this->Clear();
         goal_index_ = -1;
         bool goal_reached = false;
@@ -275,7 +276,7 @@ namespace planner {
 
     float Informed_RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end, float closest_distance)
     {
-        return (start - end).norm() + 1/closest_distance * 10;
+        return (start - end).norm() + 1/closest_distance * 5;
     }
 
     Eigen::Vector3f Informed_RRT_Star::SampleUnitBall()

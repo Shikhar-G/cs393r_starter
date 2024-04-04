@@ -41,7 +41,7 @@ class Informed_RRT_Star : public Planner{
         float start_angle_;
         Eigen::Vector2f goal_;
         //the goal radius is in meters, creates 
-        float goal_radius_ = 0.5;
+        float goal_radius_ = 1;
         vector<Eigen::Vector2f> vertices_;
         unordered_map<size_t, vector<size_t>> edges_;
         vector<size_t> parents_;
@@ -49,13 +49,13 @@ class Informed_RRT_Star : public Planner{
         vector<float> costs_distance_;
         size_t goal_index_ = -1;
         vector_map::VectorMap *vector_map_;
-        size_t num_iterations_ = 10000;
+        size_t num_iterations_ = 5000;
         float min_x_;
         float max_x_;
         float min_y_;
         float max_y_;
         float radius_ = 1.5;
-        float step_size_ = 0.5;
+        float step_size_ = 0.3;
         float safety_margin_ = 0.2;
         //random number generator
         util_random::Random rng_;

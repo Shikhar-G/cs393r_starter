@@ -107,10 +107,10 @@ namespace navigation
     {
       path_.clear();
       path_ = global_planner_.GetPath();
-      // nonsmooth_path_ = global_planner_.GetPath(false);
+      nonsmooth_path_ = global_planner_.GetPath(false);
       path_index_ = 0;
       nav_complete_ = false;
-      ROS_INFO("%ld", path_.size());
+      ROS_INFO("Path size: %ld", path_.size());
       SetNextLocalGoal();
     }
     else
@@ -119,55 +119,8 @@ namespace navigation
     }
   }
 
-  Eigen::Vector2f Navigation::findCircleLineIntersection(const Eigen::Vector2f& p1, const Eigen::Vector2f& p2) {
-
-    // Translate points based on circle center
-    Eigen::Vector2f p1Translated(p1.x() - robot_loc_.x(), p1.y() - robot_loc_.y());
-    Eigen::Vector2f p2Translated(p2.x() - robot_loc_.x(), p2.y() - robot_loc_.y());
-
-    // Line equation coefficients A*x + B*y + C = 0
-    float A = p2Translated.y() - p1Translated.y();
-    float B = p1Translated.x() - p2Translated.x();
-    float C = p2Translated.x() * p1Translated.y() - p1Translated.x() * p2Translated.y();
-
-    // Quadratic equation coefficients
-    float a = A * A + B * B;
-    float b = 2 * C * A;
-    float c = C * C - B * B * CARROT_RADIUS * CARROT_RADIUS;
-    ROS_INFO("A: %f B: %f C: %f\n", A, B, C);
-
-
-    // Discriminant
-    float D = b * b - 4 * a * c;
-    ROS_INFO("D: %f\n", D);
-
-    if (D < 0) {
-        // No intersection
-        return Eigen::Vector2f(-1000, -1000);
-    }
-
-    // Find points of intersection
-    for (float sign : {-1, 1}) {
-        float t = (-b + sign * std::sqrt(D)) / (2 * a);
-        float intersection_x = (p1Translated.x() + t * (p2Translated.x() - p1Translated.x())) + robot_loc_.x();
-        float intersection_y = (p1Translated.y() + t * (p2Translated.y() - p1Translated.y())) + robot_loc_.y();
-        Eigen::Vector2f intersection = Eigen::Vector2f(intersection_x, intersection_y);
-        // Check if the intersection point lies within the line segment
-        if (std::min(p1.x(), p2.x()) <= intersection.x() && intersection.x() <= std::max(p1.x(), p2.x()) &&
-            std::min(p1.y(), p2.y()) <= intersection.y() && intersection.y() <= std::max(p1.y(), p2.y())) {
-            return intersection;
-        }
-    }
-    return Eigen::Vector2f(-1000, -1000);
-}
-
   void Navigation::SetNextLocalGoal() 
   {
-    if (path_index_ == path_.size() - 1)
-    {
-      local_goal_loc_ = nav_goal_loc_;
-      return;
-    }
     // check each line segment from current path index to the end of the path for the first point that intersects the carrot radius
     for (size_t i = path_index_; i < path_.size() - 1; i++)
     {
@@ -260,24 +213,27 @@ namespace navigation
   if (path_.empty() || nav_complete_)
       return;
 
-  
+    Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
-    // ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
     // Do we need to replan?
-    // Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
-    if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
+    if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
       // goal reached
-      if (local_goal_loc_ == nav_goal_loc_ && (robot_loc_ - local_goal_loc_).norm() < 0.5) {
-        drive_msg_.velocity = 0;
-        drive_msg_.curvature = 0;
-        path_.clear();
-        nav_complete_ = true;
-        path_index_ = 0;
-        return;
+      if (local_goal_loc_ == nav_goal_loc_) {
+        if ((next_robot_loc - local_goal_loc_).norm() < 0.5) {
+          drive_msg_.velocity = 0;
+          drive_msg_.curvature = 0;
+          path_.clear();
+          nav_complete_ = true;
+          path_index_ = 0;
+          return;
+        } 
       }
-      SetNextLocalGoal();
+      else {
+        path_index_++;
+        local_goal_loc_ = path_[path_index_];
+      }
     }
-    else if ((robot_loc_ - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
+    else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
       ROS_INFO("Replanning...");
@@ -302,10 +258,6 @@ namespace navigation
       fpls.push_back(dis);
       approaches.push_back(approach);
       dtgs.push_back(dtg_score);
-      // visualize the point
-      // ROS_INFO("X: %f Y: %f",robot_loc_.x(),robot_loc_.y());
-      // Eigen::Vector2f next_xy = Eigen::Vector2f(robot_loc_.x() + 1,robot_loc_.y());
-      // DrawPoint(next_xy, 0x0000FF, global_viz_msg_);
     }
 
     // normalize all vectors
@@ -315,11 +267,9 @@ namespace navigation
     float min_approach = *std::min_element(approaches.begin(), approaches.end());
     float max_dtg = *std::max_element(dtgs.begin(), dtgs.end());
     float min_dtg = *std::min_element(dtgs.begin(), dtgs.end());
-    // ROS_INFO("Max FPL: %f Min FPL: %f",max_fpl,min_fpl);
-    // ROS_INFO("Max Approach: %f Min Approach: %f",max_approach,min_approach);
-    // ROS_INFO("Max DTG: %f Min DTG: %f",max_dtg,min_dtg);
     for(int i = 0; i < 20; i++){
       // ensure that the path is valid
+      float raw_fpl = fpls[i];
       if (fpls[i] < MARGIN || approaches[i] < MARGIN) continue;
       if (max_fpl - min_fpl == 0) fpls[i] = 0;
       else fpls[i] = (fpls[i] - min_fpl)/(max_fpl - min_fpl);
@@ -331,7 +281,7 @@ namespace navigation
       if(total_score > score){
         score = total_score;
         best_curvature = -1 + i*curvature_interval;
-        distance_to_travel = fpls[i];
+        distance_to_travel = raw_fpl;
       }
     }
     // no valid paths
@@ -342,16 +292,12 @@ namespace navigation
     }
     else {
       float curvature = best_curvature;
-      // float distance_to_goal = FreePathLength(curvature, point_cloud_);
-      // float approach = ClosestPointApproach(curvature,point_cloud_);
-      // float score = ScorePaths(approach,distance_to_travel,0.25);
-      // ROS_INFO("%f\t%f",approach,score);
       // The latest observed point cloud is accessible via "point_cloud_"
       drive_msg_.velocity = TimeOptimalControl(distance_to_travel);
       drive_msg_.curvature = curvature;
     }
       // Add timestamps to all messages.
-      // ClearVisualizationMsg(global_viz_msg_);
+    ClearVisualizationMsg(global_viz_msg_);
     PublishGlobalPlanner();
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();
@@ -516,13 +462,13 @@ namespace navigation
     } else {
       radius = 1 / curvature;
     }
-    float curr_velocity = robot_vel_.norm();
+    float curr_velocity = 1;
     float next_x;
     float next_y;
     // calculate steering angle based on curvature
     if (radius == 0) {
-      next_x = robot_loc_.x() + robot_vel_.x() * 2;
-      next_y = robot_loc_.y() + robot_vel_.y() * 2;
+      next_x = robot_loc_.x() + curr_velocity * 2;
+      next_y = robot_loc_.y() + curr_velocity * 2;
     }
     else {
       // new theta_swept
