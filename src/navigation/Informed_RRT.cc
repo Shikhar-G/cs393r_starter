@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <vector>
 
+
+
 namespace planner {
     Informed_RRT_Star::Informed_RRT_Star(){}
 
@@ -38,15 +40,7 @@ namespace planner {
         max_y_ = max_y;
         // ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
     }
-
-    void Informed_RRT_Star::SetStart(Eigen::Vector2f start, float angle) {
-        start_ = start;
-        start_angle_ = angle;
-        // add 3 walls to the vector map which surround the car around the start point with the opening
-        // at the car's heading direction
-       
-    }
-
+    
     bool Informed_RRT_Star::Plan() {
         // Reset the tree
         this->Clear();

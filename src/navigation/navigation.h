@@ -82,7 +82,7 @@ namespace navigation
     // obstacle safety margin
     const float MARGIN = 0.1;
     // system latency
-    const float LATENCY = 0.125;
+    const float LATENCY = 0;
     // Carrot radius for the simple carrot follower.
     const float CARROT_RADIUS = 3;
     // Constructor

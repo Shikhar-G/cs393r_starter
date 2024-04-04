@@ -264,10 +264,10 @@ namespace navigation
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     // ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
     // Do we need to replan?
-    Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
-    if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
+    // Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
+    if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
       // goal reached
-      if (local_goal_loc_ == nav_goal_loc_ && (next_robot_loc - local_goal_loc_).norm() < 0.5) {
+      if (local_goal_loc_ == nav_goal_loc_ && (robot_loc_ - local_goal_loc_).norm() < 0.5) {
         drive_msg_.velocity = 0;
         drive_msg_.curvature = 0;
         path_.clear();
@@ -277,7 +277,7 @@ namespace navigation
       }
       SetNextLocalGoal();
     }
-    else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
+    else if ((robot_loc_ - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
       ROS_INFO("Replanning...");
@@ -287,7 +287,7 @@ namespace navigation
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
-    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, next_robot_loc);
+    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
     float curvature_interval = 0.1;
     float best_curvature = 0;
     float distance_to_travel = 0;
@@ -338,6 +338,7 @@ namespace navigation
     if (score == -100000){
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
+      ROS_INFO("No valid paths");
     }
     else {
       float curvature = best_curvature;
@@ -476,7 +477,7 @@ namespace navigation
     float closest_point = 3;
     float max_range = 5;
     float car_w = CAR_WIDTH + 2 * MARGIN;
-    if ((int) curvature * 100 == 0)
+    if ((int) (curvature * 100) == 0)
     {
       radius = 0;
     }
