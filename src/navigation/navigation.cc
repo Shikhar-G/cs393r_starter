@@ -107,6 +107,7 @@ namespace navigation
     {
       path_.clear();
       path_ = global_planner_.GetPath();
+      // nonsmooth_path_ = global_planner_.GetPath(false);
       path_index_ = 0;
       nav_complete_ = false;
       ROS_INFO("%ld", path_.size());
@@ -170,40 +171,13 @@ namespace navigation
     // check each line segment from current path index to the end of the path for the first point that intersects the carrot radius
     for (size_t i = path_index_; i < path_.size() - 1; i++)
     {
-      // Eigen::Vector2f start = path_[i];
       Eigen::Vector2f end = path_[i + 1];
-      // float dist_to_start = (start - robot_loc_).norm();
       float dist_to_end = (end - robot_loc_).norm();
-      // if (i + 1 == path_.size() - 1 && )
-      // {
-      //   ROS_INFO("End is goal");
-      //   ROS_INFO("Dist to nav goal: %f", (nav_goal_loc_ - robot_loc_).norm());
-      //   ROS_INFO("Dist to end: %f", dist_to_end);
-      //   local_goal_loc_ = end;
-      //   path_index_ = i + 1;
-      //   return;
-      // }
-      // if (dist_to_start < CARROT_RADIUS && dist_to_end >= CARROT_RADIUS)
       if (dist_to_end <= CARROT_RADIUS)
       {
         local_goal_loc_ = end;
         path_index_ = i + 1;
         return;
-        // ROS_INFO("start: %f %f", start.x(), start.y());
-        // ROS_INFO("end: %f %f", end.x(), end.y());
-        // ROS_INFO("Carrot Radius: %f", CARROT_RADIUS);
-        // // find the intersection between the circle of radius carrot radius centered at the robot and the line segment
-        // Eigen::Vector2f intersection = findCircleLineIntersection(start, end);
-        // if (intersection.x() == -1000 && intersection.y() == -1000)
-        // {
-        //   path_.clear();
-        //   nav_complete_ = true;
-        //   ROS_INFO("Navigation failed. Please replan.");
-        //   return;
-        // }
-        // local_goal_loc_ = intersection;
-        // path_index_ = i + 1;
-        // break;
       }
     }
     ROS_INFO("Could not find intersection");
@@ -228,6 +202,13 @@ namespace navigation
                kColor,
                global_viz_msg_);
     }
+    // for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
+    // {
+    //   DrawLine(nonsmooth_path_[i],
+    //            nonsmooth_path_[i + 1],
+    //            0x0000FF,
+    //            global_viz_msg_);
+    // }
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
@@ -283,9 +264,10 @@ namespace navigation
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     // ROS_INFO("Local Goal: %f %f", local_goal_loc_.x(), local_goal_loc_.y());
     // Do we need to replan?
-    if ((robot_loc_ - local_goal_loc_).norm() < 1.5) {
+    Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
+    if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
       // goal reached
-      if (local_goal_loc_ == nav_goal_loc_ && (robot_loc_ - local_goal_loc_).norm() < 0.5) {
+      if (local_goal_loc_ == nav_goal_loc_ && (next_robot_loc - local_goal_loc_).norm() < 0.5) {
         drive_msg_.velocity = 0;
         drive_msg_.curvature = 0;
         path_.clear();
@@ -295,15 +277,17 @@ namespace navigation
       }
       SetNextLocalGoal();
     }
-    else if ((robot_loc_ - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
-      // try to replan
-      SetNextLocalGoal();
+    else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
+      drive_msg_.velocity = 0;
+      drive_msg_.curvature = 0;
+      ROS_INFO("Replanning...");
+      SetNavGoal(nav_goal_loc_, nav_goal_angle_);
     }
 
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
-    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
+    std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, next_robot_loc);
     float curvature_interval = 0.1;
     float best_curvature = 0;
     float distance_to_travel = 0;
@@ -492,7 +476,7 @@ namespace navigation
     float closest_point = 3;
     float max_range = 5;
     float car_w = CAR_WIDTH + 2 * MARGIN;
-    if (curvature == 0)
+    if ((int) curvature * 100 == 0)
     {
       radius = 0;
     }

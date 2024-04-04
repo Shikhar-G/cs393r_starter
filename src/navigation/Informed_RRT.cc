@@ -36,7 +36,15 @@ namespace planner {
         max_x_ = max_x;
         min_y_ = min_y;
         max_y_ = max_y;
-        ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
+        // ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
+    }
+
+    void Informed_RRT_Star::SetStart(Eigen::Vector2f start, float angle) {
+        start_ = start;
+        start_angle_ = angle;
+        // add 3 walls to the vector map which surround the car around the start point with the opening
+        // at the car's heading direction
+       
     }
 
     bool Informed_RRT_Star::Plan() {
@@ -133,7 +141,7 @@ namespace planner {
         return !IsCollision(closest_distance);
     }
 
-    vector<Eigen::Vector2f> Informed_RRT_Star::GetPath()
+    vector<Eigen::Vector2f> Informed_RRT_Star::GetPath(bool smooth)
     {
         vector<Eigen::Vector2f> path_out;
         vector<Eigen::Vector2f> smooth_path;
@@ -157,24 +165,117 @@ namespace planner {
         //the path goes from goal to start right now, reverse it
         std::reverse(path_out.begin(),path_out.end());
         path_out.push_back(goal_);
-        //path smoothing
-        Eigen::Vector2f evaluating_vertex = path_out[0];
-        smooth_path.push_back(evaluating_vertex);
-        size_t position_index = 0;
-        while(position_index != path_out.size() -1)
+        if (!smooth)
         {
+            return path_out;
+        }
+        smooth_path.resize(path_out.size());
+        size_t position_index = 0;
+        while(position_index < path_out.size())
+        {
+            Eigen::Vector2f evaluating_vertex = path_out[position_index];
+            smooth_path[position_index] = evaluating_vertex;
             for(size_t i=path_out.size() - 1; i > position_index; i--)
             {
                 float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
-                if(!IsCollision(closest_distance))
+                if(!IsCollision(closest_distance) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[i] - costs_[position_index])
                 {
+                    smooth_path[i] = path_out[i];
+                    float num_points_between = i - position_index;
+                    if (num_points_between > 1)
+                    {
+                        float x_step = (path_out[i][0] - evaluating_vertex[0])/(num_points_between);
+                        float y_step = (path_out[i][1] - evaluating_vertex[1])/(num_points_between);
+                        for (size_t j = 1; j < num_points_between; j++)
+                        {
+                            smooth_path[position_index + j] = Eigen::Vector2f(evaluating_vertex[0] + j*x_step, evaluating_vertex[1] + j*y_step);
+                        }
+                    }
                     position_index = i;
-                    evaluating_vertex = path_out[position_index];
-                    smooth_path.push_back(evaluating_vertex);
+                    break;
                 }
             }
+            position_index++;
         }
+        return smooth_path;
+    }
 
+
+    vector<Eigen::Vector2f> Informed_RRT_Star::GetPath()
+    {
+        vector<Eigen::Vector2f> path_out;
+        vector<size_t> path_indices;
+        vector<Eigen::Vector2f> smooth_path;
+        // the goal can not be larger then the size of vertices_
+        assert(!(vertices_.size() < goal_index_));
+
+        size_t curr_vertex = goal_index_;
+        //push goal to path.
+        path_out.push_back(vertices_[curr_vertex]);
+        path_indices.push_back(curr_vertex);
+
+        //starting from the goal work backwards to the start
+        while (curr_vertex != 0)
+        {
+            size_t parent_vertex = parents_[curr_vertex];
+            // Eigen::Vector2f curr = vertices_[curr_vertex];
+            // Eigen::Vector2f parent = vertices_[parent_vertex];
+            curr_vertex = parent_vertex;
+            path_out.push_back(vertices_[curr_vertex]);
+            path_indices.push_back(curr_vertex);
+        }
+        
+        //the path goes from goal to start right now, reverse it
+        std::reverse(path_out.begin(),path_out.end());
+        std::reverse(path_indices.begin(),path_indices.end());
+        // add the goal as a vertex
+        vertices_.push_back(goal_);
+        parents_.push_back(goal_index_);
+        float closest_distance = ClosestDistanceToWall(vertices_[goal_index_], goal_);
+        costs_.push_back(costs_[goal_index_] + Cost(vertices_[goal_index_], goal_, closest_distance));
+        path_out.push_back(goal_);
+        path_indices.push_back(vertices_.size() - 1);
+
+        //path smoothing
+        // initialize the smooth path with the start
+        smooth_path.resize(path_out.size());
+        size_t position_index = 0;
+        while(position_index < path_out.size())
+        {
+            // ROS_INFO("position_index: %zu", position_index);
+            Eigen::Vector2f evaluating_vertex = path_out[position_index];
+            smooth_path[position_index] = evaluating_vertex;
+            for(size_t i=path_out.size() - 1; i > position_index; i--)
+            {
+                size_t start = path_indices[position_index];
+                size_t end = path_indices[i];
+                float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
+                if(!IsCollision(closest_distance, safety_margin_*2) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[end] - costs_[start])
+                {
+                    smooth_path[i] = path_out[i];
+                    float num_points_between = i - position_index;
+                    if (num_points_between > 1)
+                    {
+                        float x_step = (path_out[i][0] - evaluating_vertex[0])/(num_points_between);
+                        float y_step = (path_out[i][1] - evaluating_vertex[1])/(num_points_between);
+                        for (size_t j = 1; j < num_points_between; j++)
+                        {
+                            smooth_path[position_index + j] = Eigen::Vector2f(evaluating_vertex[0] + j*x_step, evaluating_vertex[1] + j*y_step);
+                        }
+                    }
+                    // ROS_INFO("smoothed path from %zu to %zu", position_index, i);
+                    float cost_reduction = (costs_[end] - costs_[start]) - (Cost(evaluating_vertex, path_out[i], closest_distance));
+                    // ROS_INFO("cost reduction: %f", cost_reduction);
+                    for (size_t j = path_out.size() - 1; j >= i; j--)
+                    {
+                        costs_[path_indices[j]] -= cost_reduction;
+                    }
+                    position_index = i;
+                    break;
+                }
+            }
+            position_index++;
+        }
         return smooth_path;
     }
 
@@ -276,6 +377,11 @@ namespace planner {
         Eigen::Vector2f nearest = vertices_[nearest_vertex_index];
         Eigen::Vector2f direction = (random_point - nearest).normalized();
         return nearest + direction * step_size_;
+    }
+
+    bool Informed_RRT_Star::IsCollision(float closest_distance, float margin)
+    {
+        return closest_distance < margin;
     }
 
     bool Informed_RRT_Star::IsCollision(float closest_distance)

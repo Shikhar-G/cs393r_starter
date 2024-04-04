@@ -38,6 +38,7 @@ class Informed_RRT_Star : public Planner{
 
     private:
         Eigen::Vector2f start_;
+        float start_angle_;
         Eigen::Vector2f goal_;
         //the goal radius is in meters, creates 
         float goal_radius_ = 0.5;
@@ -65,6 +66,7 @@ class Informed_RRT_Star : public Planner{
         Eigen::Vector2f Steer(size_t nearest_vertex_index, const Eigen::Vector2f& random_point);
         bool IsValidVertex(const Eigen::Vector2f& vertex);
         bool IsCollision(float closest_distance);
+        bool IsCollision(float closest_distance, float margin);
         void Rewire(const Eigen::Vector2f& new_vertex, const vector<size_t>& nearby_vertices);
         float Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end, float closest_distance);
         size_t FindNearestVertexInRadius(const Eigen::Vector2f& point, size_t nearest_vertex_index, const vector<size_t>& vertices_in_radius);
@@ -86,13 +88,14 @@ class Informed_RRT_Star : public Planner{
         void Clear() {vertices_.clear(); edges_.clear(); parents_.clear(); costs_.clear(); goal_index_ = -1;}
 
         void SetStart(Eigen::Vector2f start) {start_ = start;}
+        void SetStart(Eigen::Vector2f start, float start_angle);
         void SetGoal(Eigen::Vector2f goal) {goal_ = goal;}
 
         bool Plan();
 
         vector<pair<Eigen::Vector2f, Eigen::Vector2f>> GetTree();
-
         vector<Eigen::Vector2f> GetPath();
+        vector<Eigen::Vector2f> GetPath(bool smooth);
 
     };
 }

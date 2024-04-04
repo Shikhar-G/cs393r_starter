@@ -82,7 +82,7 @@ namespace navigation
     // obstacle safety margin
     const float MARGIN = 0.1;
     // system latency
-    const float LATENCY = 0;
+    const float LATENCY = 0.125;
     // Carrot radius for the simple carrot follower.
     const float CARROT_RADIUS = 3;
     // Constructor
@@ -172,6 +172,7 @@ namespace navigation
     //path planning
     planner::Informed_RRT_Star global_planner_; 
     std::vector<Eigen::Vector2f> path_;
+    std::vector<Eigen::Vector2f> nonsmooth_path_;
     // Local goal location.
     Eigen::Vector2f local_goal_loc_;
     // Current path index.
