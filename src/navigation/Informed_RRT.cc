@@ -136,6 +136,7 @@ namespace planner {
     vector<Eigen::Vector2f> Informed_RRT_Star::GetPath()
     {
         vector<Eigen::Vector2f> path_out;
+        vector<Eigen::Vector2f> smooth_path;
         // the goal can not be larger then the size of vertices_
         assert(!(vertices_.size() < goal_index_));
 
@@ -156,7 +157,25 @@ namespace planner {
         //the path goes from goal to start right now, reverse it
         std::reverse(path_out.begin(),path_out.end());
         path_out.push_back(goal_);
-        return path_out;
+        //path smoothing
+        Eigen::Vector2f evaluating_vertex = path_out[0];
+        smooth_path.push_back(evaluating_vertex);
+        size_t position_index = 0;
+        while(position_index != path_out.size() -1)
+        {
+            for(size_t i=path_out.size() - 1; i > position_index; i--)
+            {
+                float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
+                if(!IsCollision(closest_distance))
+                {
+                    position_index = i;
+                    evaluating_vertex = path_out[position_index];
+                    smooth_path.push_back(evaluating_vertex);
+                }
+            }
+        }
+
+        return smooth_path;
     }
 
     float Informed_RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end, float closest_distance)
