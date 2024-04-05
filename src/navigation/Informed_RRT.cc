@@ -295,7 +295,7 @@ namespace planner {
 
     float Informed_RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end, float closest_distance)
     {
-        return (start - end).norm();// + 1/closest_distance * 5;
+        return (start - end).norm() + 1/closest_distance * 5;
     }
 
     Eigen::Vector3f Informed_RRT_Star::SampleUnitBall()
