@@ -102,7 +102,7 @@ namespace navigation
     Eigen::Vector2f start_loc(robot_loc_.x() + cos(robot_angle_), robot_loc_.y() + sin(robot_angle_));
     global_planner_.SetStart(start_loc);
     global_planner_.SetGoal(nav_goal_loc_);
-    global_planner_.SetPointCloud(point_cloud_);
+    global_planner_.SetPointCloud(point_cloud_global_);
     bool path_found = global_planner_.Plan();
     if (path_found)
     {
@@ -208,6 +208,7 @@ namespace navigation
       float x = point_cloud_[i].x() * cos(robot_angle_) - point_cloud_[i].y() * sin(robot_angle_) + robot_loc_.x();
       float y = point_cloud_[i].x() * sin(robot_angle_) + point_cloud_[i].y() * cos(robot_angle_) + robot_loc_.y();
       point_cloud_global_.push_back(Vector2f(x, y));
+      DrawPoint(Vector2f(x, y), 0xFF0000, global_viz_msg_);
     }
   }
 
@@ -231,7 +232,7 @@ namespace navigation
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     // Do we need to replan?
     if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
-      global_planner_.SetPointCloud(point_cloud_);
+      global_planner_.SetPointCloud(point_cloud_global_);
       bool path_valid = global_planner_.isPathValid(path_index_);
       if (!path_valid) {
         ROS_INFO("Path is now invalid");
@@ -321,6 +322,9 @@ namespace navigation
     }
       // Add timestamps to all messages.
     ClearVisualizationMsg(global_viz_msg_);
+    // for(size_t i= 0; i < point_cloud_global_.size(); i++){
+    //   DrawPoint(point_cloud_global_[i], 0xFF0000, global_viz_msg_);
+    // }
     PublishGlobalPlanner();
     local_viz_msg_.header.stamp = ros::Time::now();
     global_viz_msg_.header.stamp = ros::Time::now();

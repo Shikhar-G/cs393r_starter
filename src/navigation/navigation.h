@@ -167,7 +167,7 @@ namespace navigation
     // weights for scoring paths
     float w1_ = 1.0;
     float w2_ = 0.25;
-    float w3_ = 0.75;
+    float w3_ = 1.25;
 
 
     void SetNextLocalGoal();

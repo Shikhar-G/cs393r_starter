@@ -56,8 +56,8 @@ class Informed_RRT_Star : public Planner{
         float max_x_;
         float min_y_;
         float max_y_;
-        float radius_ = 1.5;
-        float step_size_ = 0.3;
+        float radius_ = 1;
+        float step_size_ = 0.5;
         float safety_margin_ = 0.2;
         //random number generator
         util_random::Random rng_;

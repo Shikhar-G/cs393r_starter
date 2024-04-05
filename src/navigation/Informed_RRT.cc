@@ -74,6 +74,7 @@ namespace planner {
                 random_point = goal_;
                 if (center == start_) center = goal_;
                 else center = start_;
+                ROS_INFO("iteration: %ld", true_iter);
             }
             else {
                 if (true_iter % 50 == 0)
@@ -261,7 +262,7 @@ namespace planner {
                 size_t start = path_indices[position_index];
                 size_t end = path_indices[i];
                 float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
-                if(!IsCollision(closest_distance, safety_margin_*2) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[end] - costs_[start])
+                if(!IsCollision(closest_distance, safety_margin_) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[end] - costs_[start])
                 {
                     ROS_INFO("Closest distance between %zu and %zu: %f", start, end, closest_distance);
                     smooth_path[i] = path_out[i];
@@ -294,7 +295,7 @@ namespace planner {
 
     float Informed_RRT_Star::Cost(const Eigen::Vector2f& start, const Eigen::Vector2f& end, float closest_distance)
     {
-        return (start - end).norm() + 1/closest_distance * 5;
+        return (start - end).norm();// + 1/closest_distance * 5;
     }
 
     Eigen::Vector3f Informed_RRT_Star::SampleUnitBall()
@@ -430,43 +431,43 @@ namespace planner {
         // iterate through point cloud and find the closest distance to a point
         for (const Eigen::Vector2f& point : point_cloud_)
         {
-            float distance;
-            if (start == end)
-                distance = (point - start).norm();
-            else {
-                // compute distance from point to line manually
-                Eigen::Vector2f start_to_point = point - start;
-                Eigen::Vector2f start_to_end = end - start;
-                float t = start_to_point.dot(start_to_end) / start_to_end.squaredNorm();
-                if (t < 0)
-                {
-                    distance = start_to_point.norm();
-                }
-                else if (t > 1)
-                {
-                    distance = (point - end).norm();
-                }
-                else {
-                    distance = (point - (start + t * start_to_end)).norm();
-                }
-            }
-            if (distance < safety_margin_)
-            {
-                return 0;
-            }
-            else {
-                min_distance = std::min(distance, min_distance);
-            }
-            // float sq_dist;
-            // Eigen::Vector2f projected_point;
-            // geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
-            //  if (sq_dist < Sq(safety_margin_))
+            // float distance;
+            // if (start == end)
+            //     distance = (point - start).norm();
+            // else {
+            //     // compute distance from point to line manually
+            //     Eigen::Vector2f start_to_point = point - start;
+            //     Eigen::Vector2f start_to_end = end - start;
+            //     float t = start_to_point.dot(start_to_end) / start_to_end.squaredNorm();
+            //     if (t < 0)
+            //     {
+            //         distance = start_to_point.norm();
+            //     }
+            //     else if (t > 1)
+            //     {
+            //         distance = (point - end).norm();
+            //     }
+            //     else {
+            //         distance = (point - (start + t * start_to_end)).norm();
+            //     }
+            // }
+            // if (distance < safety_margin_)
             // {
             //     return 0;
             // }
             // else {
-            //     min_distance = std::min(sqrt(sq_dist), min_distance);
+            //     min_distance = std::min(distance, min_distance);
             // }
+            float sq_dist;
+            Eigen::Vector2f projected_point;
+            geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
+             if (sq_dist < Sq(safety_margin_))
+            {
+                return 0;
+            }
+            else {
+                min_distance = std::min(sqrt(sq_dist), min_distance);
+            }
         }
         return min_distance;
     }
