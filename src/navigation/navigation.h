@@ -131,6 +131,8 @@ namespace navigation
     float odom_start_angle_;
     // Latest observed point cloud.
     std::vector<Eigen::Vector2f> point_cloud_;
+    // Point cloud in global frame.
+    std::vector<Eigen::Vector2f> point_cloud_global_;
     // SimpleQueue to store the controls issued # needs to be fixed
     // SimpleQueue<std::pair<std::vector<Eigen::Vector2f, float>, float>> control_queue_;
     // Whether navigation is complete.

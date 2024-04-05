@@ -160,13 +160,13 @@ namespace navigation
                kColor,
                global_viz_msg_);
     }
-    for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
-    {
-      DrawLine(nonsmooth_path_[i],
-               nonsmooth_path_[i + 1],
-               0x0000FF,
-               global_viz_msg_);
-    }
+    // for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
+    // {
+    //   DrawLine(nonsmooth_path_[i],
+    //            nonsmooth_path_[i + 1],
+    //            0x0000FF,
+    //            global_viz_msg_);
+    // }
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
@@ -200,6 +200,15 @@ namespace navigation
                                      double time)
   {
     point_cloud_ = cloud;
+    point_cloud_global_.clear();
+
+    for (size_t i = 0; i < point_cloud_.size(); i++)
+    {
+      // transform point cloud to global frame relative to robot location and angle
+      float x = point_cloud_[i].x() * cos(robot_angle_) - point_cloud_[i].y() * sin(robot_angle_) + robot_loc_.x();
+      float y = point_cloud_[i].x() * sin(robot_angle_) + point_cloud_[i].y() * cos(robot_angle_) + robot_loc_.y();
+      point_cloud_global_.push_back(Vector2f(x, y));
+    }
   }
 
   void Navigation::Run()
