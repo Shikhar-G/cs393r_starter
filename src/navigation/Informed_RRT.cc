@@ -38,13 +38,13 @@ namespace planner {
         max_x_ = max_x;
         min_y_ = min_y;
         max_y_ = max_y;
-        ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
+        // ROS_INFO("min_x: %f, max_x: %f, min_y: %f, max_y: %f", min_x_, max_x_, min_y_, max_y_);
     }
     
     bool Informed_RRT_Star::Plan() {
         // Reset the tree
         ROS_INFO("Planning...");
-        ROS_INFO("Size of point cloud: %ld", point_cloud_.size());
+        // ROS_INFO("Size of point cloud: %ld", point_cloud_.size());
         this->Clear();
         goal_index_ = -1;
         bool goal_reached = false;
@@ -53,13 +53,12 @@ namespace planner {
         parents_.push_back(0);
         costs_.push_back(0);
         costs_distance_.push_back(0);
-        size_t true_iter = 0;
         float curr_radius = 0.5;
         Eigen::Vector2f center = start_;
+        step_size_ = 0.5;
         // iterate through the number of iterations, but don't stop if the goal hasn't been reached
-        for (size_t i = 0; i < num_iterations_;)
+        for (size_t i = 0, true_iter = 1; i < num_iterations_ && true_iter <= max_iterations_; true_iter++)
         {
-            true_iter++;
             Eigen::Vector2f random_point;
             // Sample a random point
 
@@ -74,7 +73,12 @@ namespace planner {
                 random_point = goal_;
                 if (center == start_) center = goal_;
                 else center = start_;
-                ROS_INFO("iteration: %ld", true_iter);
+
+                if (true_iter % 10000 == 0)
+                {
+                    step_size_ /= 1.5;
+                }
+                // ROS_INFO("iteration: %ld", true_iter);
             }
             else {
                 if (true_iter % 50 == 0)
@@ -120,9 +124,9 @@ namespace planner {
                 {
                     // Set the goal index if goal is not reached yet or the new vertex has a lower cost
                     if (!goal_reached || costs_.back() < costs_[goal_index_]) {
-                        if (!goal_reached) {
-                            ROS_INFO("Goal reached at iteration %zu", true_iter );
-                        }
+                        // if (!goal_reached) {
+                        //     ROS_INFO("Goal reached at iteration %zu", true_iter );
+                        // }
                         goal_index_ = vertices_.size() - 1;
                         goal_reached = true;
                     }
@@ -140,7 +144,8 @@ namespace planner {
 
     bool Informed_RRT_Star::isPathValid(size_t curr_index)
     {
-        for (size_t i = curr_index; i < path_.size() - 1; i++)
+        // only check 3
+        for (size_t i = curr_index; i < path_.size() - 1 && i < curr_index + 2; i++)
         {
             float closest_distance = ClosestDistanceToWall(path_[i], path_[i+1]);
             if (IsCollision(closest_distance))
@@ -264,7 +269,7 @@ namespace planner {
                 float closest_distance = ClosestDistanceToWall(evaluating_vertex, path_out[i]);
                 if(!IsCollision(closest_distance, safety_margin_) && Cost(evaluating_vertex, path_out[i], closest_distance) < costs_[end] - costs_[start])
                 {
-                    ROS_INFO("Closest distance between %zu and %zu: %f", start, end, closest_distance);
+                    // ROS_INFO("Closest distance between %zu and %zu: %f", start, end, closest_distance);
                     smooth_path[i] = path_out[i];
                     float num_points_between = i - position_index;
                     if (num_points_between > 1)
@@ -461,7 +466,7 @@ namespace planner {
             float sq_dist;
             Eigen::Vector2f projected_point;
             geometry::ProjectPointOntoLineSegment<float>(point, start, end, &projected_point, &sq_dist);
-             if (sq_dist < Sq(safety_margin_))
+            if (sq_dist < Sq(safety_margin_ / 2))
             {
                 return 0;
             }

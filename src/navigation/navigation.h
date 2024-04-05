@@ -137,6 +137,7 @@ namespace navigation
     // SimpleQueue<std::pair<std::vector<Eigen::Vector2f, float>, float>> control_queue_;
     // Whether navigation is complete.
     bool nav_complete_;
+    bool needs_replanning_;
     // Navigation goal location.
     Eigen::Vector2f nav_goal_loc_;
     // Navigation goal angle.

@@ -52,6 +52,7 @@ class Informed_RRT_Star : public Planner{
         vector_map::VectorMap *vector_map_;
         std::vector<Eigen::Vector2f> point_cloud_;
         size_t num_iterations_ = 5000;
+        size_t max_iterations_ = 100000;
         float min_x_;
         float max_x_;
         float min_y_;

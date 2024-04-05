@@ -99,7 +99,10 @@ namespace navigation
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
     // Get planned path (another callback).
-    Eigen::Vector2f start_loc(robot_loc_.x() + cos(robot_angle_), robot_loc_.y() + sin(robot_angle_));
+    // Start loc should be in front of the robot
+    float distance_offset = (CAR_LENGTH + WHEELBASE) / 2;
+    Eigen::Vector2f start_loc(robot_loc_.x() + distance_offset * cos(robot_angle_),
+                              robot_loc_.y() + distance_offset * sin(robot_angle_));
     global_planner_.SetStart(start_loc);
     global_planner_.SetGoal(nav_goal_loc_);
     global_planner_.SetPointCloud(point_cloud_global_);
@@ -111,7 +114,8 @@ namespace navigation
       nonsmooth_path_ = global_planner_.GetPath(false);
       path_index_ = 0;
       nav_complete_ = false;
-      ROS_INFO("Path size: %ld", path_.size());
+      // ROS_INFO("Path size: %ld", path_.size());
+      ROS_INFO("Found a path!");
       SetNextLocalGoal();
     }
     else
@@ -134,14 +138,20 @@ namespace navigation
         return;
       }
     }
-    ROS_INFO("Could not find intersection");
-    nav_complete_ = true;
+    drive_msg_.velocity = 0;
+    drive_msg_.curvature = 0;
+    drive_msg_.header.stamp = ros::Time::now();
+    drive_pub_.publish(drive_msg_);
+    path_.clear();
+    needs_replanning_ = true;
+    ROS_INFO("Local planner failed.");
   }
 
   void Navigation::RecoverFromFailure() {
     //if the robot is stuck first send all points to informed RRT then replan*
     ROS_INFO("Replanning...");
     SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+    needs_replanning_ = false;
   }
   void Navigation::PublishGlobalPlanner() {
   const uint32_t kColor = 0x702963;
@@ -224,35 +234,61 @@ namespace navigation
     if (!odom_initialized_)
       return;
 
+    if (needs_replanning_ && robot_vel_.norm() < 0.1)
+    {
+      ROS_INFO("Replanning...");
+      SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+      needs_replanning_ = false;
+    }
+
     // Don't move if no path
-  if (path_.empty() || nav_complete_)
+    if (path_.empty() || nav_complete_)
+    {
+      // clear visualization
+      ClearVisualizationMsg(global_viz_msg_);
+      global_viz_msg_.header.stamp = ros::Time::now();
+      viz_pub_.publish(global_viz_msg_);
       return;
+    }
+
+    local_viz_msg_.header.stamp = ros::Time::now();
+    global_viz_msg_.header.stamp = ros::Time::now();
+    drive_msg_.header.stamp = ros::Time::now();
 
     Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
     DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
     // Do we need to replan?
-    if ((next_robot_loc - local_goal_loc_).norm() < 1.5) {
+    if ((next_robot_loc - local_goal_loc_).norm() < 1.5)
+    {
       global_planner_.SetPointCloud(point_cloud_global_);
       bool path_valid = global_planner_.isPathValid(path_index_);
-      if (!path_valid) {
+      if (!path_valid)
+      {
         ROS_INFO("Path is now invalid");
         drive_msg_.velocity = 0;
         drive_msg_.curvature = 0;
-        RecoverFromFailure();
+        drive_pub_.publish(drive_msg_);
+        path_.clear();
+        needs_replanning_ = true;
         return;
       }
       // goal reached
-      if (local_goal_loc_ == nav_goal_loc_) {
-        if ((next_robot_loc - local_goal_loc_).norm() < 0.5) {
+      if (local_goal_loc_ == nav_goal_loc_)
+      {
+        if ((next_robot_loc - local_goal_loc_).norm() < 0.5)
+        {
           drive_msg_.velocity = 0;
           drive_msg_.curvature = 0;
+          drive_pub_.publish(drive_msg_);
           path_.clear();
           nav_complete_ = true;
           path_index_ = 0;
+          ROS_INFO("Goal reached!");
           return;
-        } 
+        }
       }
-      else {
+      else
+      {
         path_index_++;
         local_goal_loc_ = path_[path_index_];
       }
@@ -260,7 +296,10 @@ namespace navigation
     else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
-      RecoverFromFailure();
+      drive_pub_.publish(drive_msg_);
+      path_.clear();
+      needs_replanning_ = true;
+      return;
     }
 
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
@@ -311,8 +350,10 @@ namespace navigation
     if (score == -100000){
       drive_msg_.velocity = 0;
       drive_msg_.curvature = 0;
+      drive_pub_.publish(drive_msg_);
+      path_.clear();
+      needs_replanning_ = true;
       ROS_INFO("No valid paths");
-      RecoverFromFailure();
     }
     else {
       float curvature = best_curvature;
@@ -326,9 +367,6 @@ namespace navigation
     //   DrawPoint(point_cloud_global_[i], 0xFF0000, global_viz_msg_);
     // }
     PublishGlobalPlanner();
-    local_viz_msg_.header.stamp = ros::Time::now();
-    global_viz_msg_.header.stamp = ros::Time::now();
-    drive_msg_.header.stamp = ros::Time::now();
     // Publish messages.
     viz_pub_.publish(local_viz_msg_);
     viz_pub_.publish(global_viz_msg_);
