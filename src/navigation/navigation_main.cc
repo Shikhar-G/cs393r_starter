@@ -136,7 +136,7 @@ void GoToCallback(const geometry_msgs::PoseStamped &msg)
   const Vector2f loc(msg.pose.position.x, msg.pose.position.y);
   const float angle =
       2.0 * atan2(msg.pose.orientation.z, msg.pose.orientation.w);
-  // printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), angle);
+  printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), angle);
   navigation_->SetNavGoal(loc, angle);
 }
 

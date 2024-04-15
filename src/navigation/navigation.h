@@ -27,10 +27,6 @@
 
 #include "simple_queue.h"
 
-#include "global_planner.h"
-
-#include "Informed_RRT.h"
-
 #ifndef NAVIGATION_H
 #define NAVIGATION_H
 
@@ -66,7 +62,7 @@ namespace navigation
   public:
     const float MAX_CURVATURE = 1.0;
     // Max velocity constant
-    const float MAX_VELOCITY = 1;
+    const float MAX_VELOCITY = 1.0;
     // Max acceleration constant
     const float MAX_ACCELERATION = 4.0;
     // stop distance buffer from point of interest
@@ -83,8 +79,6 @@ namespace navigation
     const float MARGIN = 0.1;
     // system latency
     const float LATENCY = 0.125;
-    // Carrot radius for the simple carrot follower.
-    const float CARROT_RADIUS = 3;
     // Constructor
     explicit Navigation(const std::string &map_file, ros::NodeHandle *n);
 
@@ -105,7 +99,6 @@ namespace navigation
     void Run();
     // Used to set the next target pose.
     void SetNavGoal(const Eigen::Vector2f &loc, float angle);
-    void RecoverFromFailure();
 
   private:
     // simple_
@@ -131,13 +124,10 @@ namespace navigation
     float odom_start_angle_;
     // Latest observed point cloud.
     std::vector<Eigen::Vector2f> point_cloud_;
-    // Point cloud in global frame.
-    std::vector<Eigen::Vector2f> point_cloud_global_;
     // SimpleQueue to store the controls issued # needs to be fixed
     // SimpleQueue<std::pair<std::vector<Eigen::Vector2f, float>, float>> control_queue_;
     // Whether navigation is complete.
     bool nav_complete_;
-    bool needs_replanning_;
     // Navigation goal location.
     Eigen::Vector2f nav_goal_loc_;
     // Navigation goal angle.
@@ -159,32 +149,7 @@ namespace navigation
     // transform point cloud according to time delay
     std::vector<Eigen::Vector2f> TransformPointCloud(const std::vector<Eigen::Vector2f> &cloud, Eigen::Vector2f locChange);
 
-    float ScorePaths(float closest_approach, float free_path_length, float distance_to_goal);
-
-    float DistanceToGoalScore(float curvature);
-
-     Eigen::Vector2f findCircleLineIntersection(const Eigen::Vector2f& p1, const Eigen::Vector2f& p2);
-  
-    // weights for scoring paths
-    float w1_ = 1.0;
-    float w2_ = 0.25;
-    float w3_ = 1.25;
-
-
-    void SetNextLocalGoal();
-
-    //path planning
-    planner::Informed_RRT_Star global_planner_; 
-    std::vector<Eigen::Vector2f> path_;
-    std::vector<Eigen::Vector2f> nonsmooth_path_;
-    // Local goal location.
-    Eigen::Vector2f local_goal_loc_;
-    // Current path index.
-    size_t path_index_ = 0;
-    // Carrot radius for the simple carrot follower.
-
-
-    void PublishGlobalPlanner();
+    float ScorePaths(float closest_approach, float free_path_length, float w1);
   };
 
 } // namespace navigation
