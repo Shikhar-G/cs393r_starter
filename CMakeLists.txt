@@ -38,10 +38,10 @@ ADD_SUBDIRECTORY(src/shared)
 INCLUDE_DIRECTORIES(src/shared)
 INCLUDE_DIRECTORIES(src)
 
-ROSBUILD_ADD_EXECUTABLE(slam
-                        src/slam/slam_main.cc
-                        src/slam/slam.cc)
-TARGET_LINK_LIBRARIES(slam shared_library ${libs})
+#ROSBUILD_ADD_EXECUTABLE(slam
+#                        src/slam/slam_main.cc
+#                        src/slam/slam.cc)
+#TARGET_LINK_LIBRARIES(slam shared_library ${libs})
 
 
 ROSBUILD_ADD_EXECUTABLE(particle_filter
@@ -51,9 +51,7 @@ TARGET_LINK_LIBRARIES(particle_filter shared_library ${libs})
 
 ROSBUILD_ADD_EXECUTABLE(navigation
                         src/navigation/navigation_main.cc
-                        src/navigation/navigation.cc
-                        src/navigation/global_planner.cc
-                        src/navigation/Informed_RRT.cc)
+                        src/navigation/navigation.cc)
 TARGET_LINK_LIBRARIES(navigation shared_library ${libs})
 
 ADD_EXECUTABLE(eigen_tutorial
