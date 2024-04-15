@@ -40,6 +40,12 @@ using Eigen::Vector2f;
 using std::string;
 using std::vector;
 
+using visualization::ClearVisualizationMsg;
+using visualization::DrawArc;
+using visualization::DrawPoint;
+using visualization::DrawLine;
+using visualization::DrawParticle;
+
 using namespace math_util;
 using namespace ros_helpers;
 
@@ -74,6 +80,8 @@ namespace navigation
                                                                        nav_goal_angle_(0)
   {
     map_.Load(GetMapFileFromName(map_name));
+    //init global planner using map
+    global_planner_ = planner::Informed_RRT_Star(&map_);
     drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
         "ackermann_curvature_drive", 1);
     viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
@@ -86,10 +94,89 @@ namespace navigation
 
   void Navigation::SetNavGoal(const Vector2f &loc, float angle)
   {
+    // Reset any existing navigation goal and reset indicator variables.
     // Set the navigation goal.
     nav_goal_loc_ = loc;
     nav_goal_angle_ = angle;
-    nav_complete_ = false;
+    // Get planned path (another callback).
+    // Start loc should be in front of the robot
+    float distance_offset = (CAR_LENGTH + WHEELBASE) / 2;
+    Eigen::Vector2f start_loc(robot_loc_.x() + distance_offset * cos(robot_angle_),
+                              robot_loc_.y() + distance_offset * sin(robot_angle_));
+    global_planner_.SetStart(start_loc);
+    global_planner_.SetGoal(nav_goal_loc_);
+    global_planner_.SetPointCloud(point_cloud_global_);
+    bool path_found = global_planner_.Plan();
+    if (path_found)
+    {
+      path_.clear();
+      path_ = global_planner_.GetPath();
+      nonsmooth_path_ = global_planner_.GetPath(false);
+      path_index_ = 0;
+      nav_complete_ = false;
+      // ROS_INFO("Path size: %ld", path_.size());
+      ROS_INFO("Found a path!");
+      SetNextLocalGoal();
+    }
+    else
+    {
+      ROS_INFO("No path found. Please try again.");
+    }
+  }
+
+  void Navigation::SetNextLocalGoal() 
+  {
+    // check each line segment from current path index to the end of the path for the first point that intersects the carrot radius
+    for (size_t i = path_index_; i < path_.size() - 1; i++)
+    {
+      Eigen::Vector2f end = path_[i + 1];
+      float dist_to_end = (end - robot_loc_).norm();
+      if (dist_to_end <= CARROT_RADIUS)
+      {
+        local_goal_loc_ = end;
+        path_index_ = i + 1;
+        return;
+      }
+    }
+    drive_msg_.velocity = 0;
+    drive_msg_.curvature = 0;
+    drive_msg_.header.stamp = ros::Time::now();
+    drive_pub_.publish(drive_msg_);
+    path_.clear();
+    needs_replanning_ = true;
+    ROS_INFO("Local planner failed.");
+  }
+
+  void Navigation::RecoverFromFailure() {
+    //if the robot is stuck first send all points to informed RRT then replan*
+    ROS_INFO("Replanning...");
+    SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+    needs_replanning_ = false;
+  }
+  void Navigation::PublishGlobalPlanner() {
+  const uint32_t kColor = 0x702963;
+
+  // vector<pair<Vector2f, Vector2f>> tree = global_planner_.GetTree();
+  // for (size_t i = 0; i < tree.size(); ++i) {
+  //   DrawLine(tree[i].first,
+  //            tree[i].second,
+  //            kColor,
+  //            global_viz_msg_);
+  // }
+    for (size_t i = 0; i < path_.size() - 1; ++i)
+    {
+      DrawLine(path_[i],
+               path_[i + 1],
+               kColor,
+               global_viz_msg_);
+    }
+    // for (size_t i = 0; i < nonsmooth_path_.size() - 1; ++i)
+    // {
+    //   DrawLine(nonsmooth_path_[i],
+    //            nonsmooth_path_[i + 1],
+    //            0x0000FF,
+    //            global_viz_msg_);
+    // }
   }
 
   void Navigation::UpdateLocation(const Eigen::Vector2f &loc, float angle)
@@ -123,6 +210,16 @@ namespace navigation
                                      double time)
   {
     point_cloud_ = cloud;
+    point_cloud_global_.clear();
+
+    for (size_t i = 0; i < point_cloud_.size(); i++)
+    {
+      // transform point cloud to global frame relative to robot location and angle
+      float x = point_cloud_[i].x() * cos(robot_angle_) - point_cloud_[i].y() * sin(robot_angle_) + robot_loc_.x();
+      float y = point_cloud_[i].x() * sin(robot_angle_) + point_cloud_[i].y() * cos(robot_angle_) + robot_loc_.y();
+      point_cloud_global_.push_back(Vector2f(x, y));
+      DrawPoint(Vector2f(x, y), 0xFF0000, global_viz_msg_);
+    }
   }
 
   void Navigation::Run()
@@ -137,37 +234,139 @@ namespace navigation
     if (!odom_initialized_)
       return;
 
+    if (needs_replanning_ && robot_vel_.norm() < 0.1)
+    {
+      ROS_INFO("Replanning...");
+      SetNavGoal(nav_goal_loc_, nav_goal_angle_);
+      needs_replanning_ = false;
+    }
+
+    // Don't move if no path
+    if (path_.empty() || nav_complete_)
+    {
+      // clear visualization
+      ClearVisualizationMsg(global_viz_msg_);
+      global_viz_msg_.header.stamp = ros::Time::now();
+      viz_pub_.publish(global_viz_msg_);
+      return;
+    }
+
+    local_viz_msg_.header.stamp = ros::Time::now();
+    global_viz_msg_.header.stamp = ros::Time::now();
+    drive_msg_.header.stamp = ros::Time::now();
+
+    Eigen::Vector2f next_robot_loc = robot_loc_ + ForwardPredictedLocationChange();
+    DrawPoint(local_goal_loc_, 0x0000FF, global_viz_msg_);
+    // Do we need to replan?
+    if ((next_robot_loc - local_goal_loc_).norm() < 1.5)
+    {
+      global_planner_.SetPointCloud(point_cloud_global_);
+      bool path_valid = global_planner_.isPathValid(path_index_);
+      if (!path_valid)
+      {
+        ROS_INFO("Path is now invalid");
+        drive_msg_.velocity = 0;
+        drive_msg_.curvature = 0;
+        drive_pub_.publish(drive_msg_);
+        path_.clear();
+        needs_replanning_ = true;
+        return;
+      }
+      // goal reached
+      if (local_goal_loc_ == nav_goal_loc_)
+      {
+        if ((next_robot_loc - local_goal_loc_).norm() < 0.5)
+        {
+          drive_msg_.velocity = 0;
+          drive_msg_.curvature = 0;
+          drive_pub_.publish(drive_msg_);
+          path_.clear();
+          nav_complete_ = true;
+          path_index_ = 0;
+          ROS_INFO("Goal reached!");
+          return;
+        }
+      }
+      else
+      {
+        path_index_++;
+        local_goal_loc_ = path_[path_index_];
+      }
+    }
+    else if ((next_robot_loc - local_goal_loc_).norm() > CARROT_RADIUS * 1.5) {
+      drive_msg_.velocity = 0;
+      drive_msg_.curvature = 0;
+      drive_pub_.publish(drive_msg_);
+      path_.clear();
+      needs_replanning_ = true;
+      return;
+    }
+
     // std::vector<Eigen::Vector2f> last_point_cloud_ = point_cloud_;
     // The control iteration goes here.
     // Feel free to make helper functions to structure the control appropriately.
     std::vector<Eigen::Vector2f> transformed_cloud = TransformPointCloud(point_cloud_, ForwardPredictedLocationChange());
     float curvature_interval = 0.1;
     float best_curvature = 0;
-    float distance_to_goal = 0;
-    float approach = 0;
-    float score = 0;
+    float distance_to_travel = 0;
+    float score = -100000;
+    std::vector<float> fpls;
+    std::vector<float> approaches;
+    std::vector<float> dtgs;
     for(int i = 0; i < 20; i++){
       float dis = FreePathLength(-1 + i*curvature_interval, transformed_cloud);
-      approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
-      float curr_score = ScorePaths(approach,dis,0.25);
-      if(score < curr_score){
-        score = curr_score;
-        distance_to_goal = dis;
+      float approach = ClosestPointApproach(-1 + i*curvature_interval,transformed_cloud);
+      float dtg_score = DistanceToGoalScore(-1 + i*curvature_interval);
+      fpls.push_back(dis);
+      approaches.push_back(approach);
+      dtgs.push_back(dtg_score);
+    }
+
+    // normalize all vectors
+    float max_fpl = *std::max_element(fpls.begin(), fpls.end());
+    float min_fpl = *std::min_element(fpls.begin(), fpls.end());
+    float max_approach = *std::max_element(approaches.begin(), approaches.end());
+    float min_approach = *std::min_element(approaches.begin(), approaches.end());
+    float max_dtg = *std::max_element(dtgs.begin(), dtgs.end());
+    float min_dtg = *std::min_element(dtgs.begin(), dtgs.end());
+    for(int i = 0; i < 20; i++){
+      // ensure that the path is valid
+      float raw_fpl = fpls[i];
+      if (fpls[i] < MARGIN || approaches[i] < MARGIN) continue;
+      if (max_fpl - min_fpl == 0) fpls[i] = 0;
+      else fpls[i] = (fpls[i] - min_fpl)/(max_fpl - min_fpl);
+      if (max_approach - min_approach == 0) approaches[i] = 0;
+      else approaches[i] = (approaches[i] - min_approach)/(max_approach - min_approach);
+      if (max_dtg - min_dtg == 0) dtgs[i] = 0;
+      else dtgs[i] = (dtgs[i] - min_dtg)/(max_dtg - min_dtg);
+      float total_score = ScorePaths(approaches[i],fpls[i],dtgs[i]);
+      if(total_score > score){
+        score = total_score;
         best_curvature = -1 + i*curvature_interval;
+        distance_to_travel = raw_fpl;
       }
     }
-    float curvature = best_curvature;
-    // float distance_to_goal = FreePathLength(curvature, point_cloud_);
-    // float approach = ClosestPointApproach(curvature,point_cloud_);
-    // float score = ScorePaths(approach,distance_to_goal,0.25);
-    // ROS_INFO("%f\t%f",approach,score);
-    // The latest observed point cloud is accessible via "point_cloud_"
-    drive_msg_.velocity = TimeOptimalControl(distance_to_goal);
-    drive_msg_.curvature = curvature;
-    // Add timestamps to all messages.
-    local_viz_msg_.header.stamp = ros::Time::now();
-    global_viz_msg_.header.stamp = ros::Time::now();
-    drive_msg_.header.stamp = ros::Time::now();
+    // no valid paths
+    if (score == -100000){
+      drive_msg_.velocity = 0;
+      drive_msg_.curvature = 0;
+      drive_pub_.publish(drive_msg_);
+      path_.clear();
+      needs_replanning_ = true;
+      ROS_INFO("No valid paths");
+    }
+    else {
+      float curvature = best_curvature;
+      // The latest observed point cloud is accessible via "point_cloud_"
+      drive_msg_.velocity = TimeOptimalControl(distance_to_travel);
+      drive_msg_.curvature = curvature;
+    }
+      // Add timestamps to all messages.
+    ClearVisualizationMsg(global_viz_msg_);
+    // for(size_t i= 0; i < point_cloud_global_.size(); i++){
+    //   DrawPoint(point_cloud_global_[i], 0xFF0000, global_viz_msg_);
+    // }
+    PublishGlobalPlanner();
     // Publish messages.
     viz_pub_.publish(local_viz_msg_);
     viz_pub_.publish(global_viz_msg_);
@@ -207,7 +406,7 @@ namespace navigation
   float Navigation::FreePathLength(float curvature, const std::vector<Eigen::Vector2f> &point_cloud)
   {
     float radius;
-    if (curvature == 0)
+    if ((int)(curvature  * 100) == 0)
     {
       radius = 0;
     }
@@ -224,7 +423,7 @@ namespace navigation
 
     float min_theta = M_PI / 2;
 
-    if (curvature == 0)
+    if ((int)(curvature  * 100) == 0)
     {
       float straight_fpl = 10;
       for (unsigned long point = 0; point < point_cloud.size(); point++)
@@ -289,7 +488,7 @@ namespace navigation
     float closest_point = 3;
     float max_range = 5;
     float car_w = CAR_WIDTH + 2 * MARGIN;
-    if (curvature == 0)
+    if ((int) (curvature * 100) == 0)
     {
       radius = 0;
     }
@@ -320,9 +519,41 @@ namespace navigation
     }
     return closest_point;
   }
-
-  float Navigation::ScorePaths(float closest_approach, float free_path_length, float w1) {
-    return free_path_length + closest_approach*w1;
+  
+  float Navigation::DistanceToGoalScore(float curvature) {
+    float radius;
+    if ((int) (curvature * 100) == 0) {
+      radius = 0;
+    } else {
+      radius = 1 / curvature;
+    }
+    float curr_velocity = 1;
+    float next_x;
+    float next_y;
+    // calculate steering angle based on curvature
+    if (radius == 0) {
+      next_x = robot_loc_.x() + curr_velocity * 2;
+      next_y = robot_loc_.y() + curr_velocity * 2;
+    }
+    else {
+      // new theta_swept
+      float theta_swept = curr_velocity * 2 / radius;
+      float dx = radius * sin(theta_swept);
+      float dy = radius * (1 - cos(theta_swept));
+      // translate dx and dy to robot's location on map frame
+      float dx_map = dx * cos(robot_angle_) - dy * sin(robot_angle_);
+      float dy_map = dx * sin(robot_angle_) + dy * cos(robot_angle_);
+      // calculate next x and y based on steering angle and current velocity
+      next_x = robot_loc_.x() + dx_map;
+      next_y = robot_loc_.y() + dy_map;
+    }
+    float score = 1/(pow(local_goal_loc_.x() - next_x, 2) + pow(local_goal_loc_.y() - next_y, 2));
+    return score;
+  }
+  
+  float Navigation::ScorePaths(float closest_approach, float free_path_length, float distance_to_goal_score){
+    // ROS_INFO("%f %f %f",free_path_length,closest_approach,distance_to_goal_score);
+    return free_path_length*w1_ + closest_approach*w2_ + distance_to_goal_score*w3_;
   }
 
   Eigen::Vector2f Navigation::ForwardPredictedLocationChange() {
@@ -340,6 +571,6 @@ namespace navigation
     return transformed_cloud;
   }
 
+// namespace navigation
 }
 
-// namespace navigation
